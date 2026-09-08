@@ -52,13 +52,11 @@ def get_main_menu_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# دکمه‌های ریپلی کیبورد (انتخاب درس)
+# دکمه‌های ریپلی کیبورد (انتخاب درس) - چیدمان ۲×۲
 def get_lesson_keyboard():
     keyboard = [
-        [KeyboardButton("🧬 زیست")],
-        [KeyboardButton("🧪 شیمی")],
-        [KeyboardButton("⚡️ فیزیک")],
-        [KeyboardButton("📐 ریاضی")],
+        [KeyboardButton("🧬 زیست"), KeyboardButton("🧪 شیمی")],
+        [KeyboardButton("⚡️ فیزیک"), KeyboardButton("📐 ریاضی")],
         [KeyboardButton("🔙 برگشت")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
