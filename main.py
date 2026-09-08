@@ -41,11 +41,12 @@ def get_force_buttons():
     return InlineKeyboardMarkup(keyboard)
 
 # تابع بررسی عضویت کاربر در کانال
-async def is_user_member(context: ContextTypes.DEFAULT_TYPE, user_id: int) -> bool:
+async def is_user_member(application: Application, user_id: int) -> bool:
     try:
-        member = await context.bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
+        member = await application.bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
         return member.status in ["member", "administrator", "creator"]
-    except:
+    except Exception as e:
+        print(f"Error checking membership: {e}")
         return False
 
 # هندلر دستور /start
@@ -54,7 +55,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
 
     # بررسی عضویت کاربر
-    if await is_user_member(context, user_id):
+    if await is_user_member(context.application, user_id):
         # اگر عضو است، پیام خوش‌آمدگویی بفرست
         await update.message.reply_text(WELCOME_MSG)
     else:
@@ -74,7 +75,7 @@ async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE)
     message = query.message
 
     # بررسی مجدد عضویت
-    if await is_user_member(context, user_id):
+    if await is_user_member(context.application, user_id):
         # اگر عضو شده، پیام قبلی را حذف کن
         await message.delete()
         # پیام خوش‌آمدگویی جدید بفرست
