@@ -55,6 +55,10 @@ def get_main_menu_keyboard():
 # دکمه‌های ریپلی کیبورد (انتخاب درس)
 def get_lesson_keyboard():
     keyboard = [
+        [KeyboardButton("🧬 زیست")],
+        [KeyboardButton("🧪 شیمی")],
+        [KeyboardButton("⚡️ فیزیک")],
+        [KeyboardButton("📐 ریاضی")],
         [KeyboardButton("🔙 برگشت")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -135,6 +139,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "📚 ارسال سوال":
         await update.message.reply_text(
             "📚 لطفاً درس مورد نظر خود را انتخاب کنید.",
+            reply_markup=get_lesson_keyboard()
+        )
+    
+    elif text in ["🧬 زیست", "🧪 شیمی", "⚡️ فیزیک", "📐 ریاضی"]:
+        await update.message.reply_text(
+            f"✅ درس {text} انتخاب شد!\n\n"
+            "📝 لطفاً سوال خود را به همراه فایل (در صورت وجود) ارسال کنید.\n"
+            "پشتیبانان ما در اسرع وقت پاسخ خواهند داد.",
             reply_markup=get_lesson_keyboard()
         )
     
