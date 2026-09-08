@@ -41,6 +41,14 @@ INCREASE_BALANCE_TEXT = (
     "🔹 لطفاً یکی از گزینه‌های زیر را انتخاب کنید 👇"
 )
 
+# متن احراز هویت
+AUTH_TEXT = (
+    "🪪 *برای استفاده از خدمات ربات، ابتدا احراز هویت خود را تکمیل کنید.*  \n"
+    "این مرحله برای امنیت پرداخت‌ها و اطمینان از استفاده از *کارت بانکی به نام صاحب حساب کاربری* الزامی است 💳✅\n"
+    "\n"
+    "پس از تکمیل احراز هویت، امکان پرداخت و ثبت سؤال برای شما فعال خواهد شد."
+)
+
 # دکمه‌های اینلاین (فقط برای عضویت اجباری)
 def get_force_buttons():
     keyboard = [
@@ -59,11 +67,20 @@ def get_balance_buttons():
     ]
     return InlineKeyboardMarkup(keyboard)
 
+# دکمه‌های اینلاین برای احراز هویت
+def get_auth_buttons():
+    keyboard = [
+        [InlineKeyboardButton("لیست کارت‌ها 🧾", callback_data="card_list")],
+        [InlineKeyboardButton("افزودن کارت ➕", callback_data="add_card")],
+        [InlineKeyboardButton("حذف کارت ➖", callback_data="remove_card")],
+        [InlineKeyboardButton("🔙 منوی اصلی", callback_data="back_to_main")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
 # دکمه‌های ریپلی کیبورد (منوی اصلی)
 def get_main_menu_keyboard():
     keyboard = [
-        [KeyboardButton("📚 ارسال سوال")],
-        [KeyboardButton("💸 افزایش موجودی")],
+        [KeyboardButton("📚 ارسال سوال"), KeyboardButton("💸 افزایش موجودی")],
         [KeyboardButton("🔙 برگشت")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -146,12 +163,9 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
     
     if data == "auth":
         await query.edit_message_text(
-            "🪪 احراز هویت\n\n"
-            "لطفاً برای احراز هویت، اطلاعات زیر را ارسال کنید:\n"
-            "• نام و نام خانوادگی\n"
-            "• شماره تماس\n"
-            "• کد ملی",
-            reply_markup=get_balance_buttons()
+            AUTH_TEXT,
+            reply_markup=get_auth_buttons(),
+            parse_mode="Markdown"
         )
     
     elif data == "buy_package":
@@ -171,6 +185,49 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
             "قیمت هر سوال: ۱۰,۰۰۰ تومان\n"
             "لطفاً تعداد سوالات مورد نیاز خود را وارد کنید.",
             reply_markup=get_balance_buttons()
+        )
+    
+    elif data == "back_to_main":
+        # حذف پیام قبلی
+        await query.message.delete()
+        # نمایش منوی اصلی
+        await query.message.reply_text(
+            MAIN_MENU_TEXT,
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode="Markdown"
+        )
+
+# هندلر دکمه‌های احراز هویت
+async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    
+    if data == "card_list":
+        await query.edit_message_text(
+            "🧾 لیست کارت‌ها\n\n"
+            "شما هیچ کارتی ثبت نکرده‌اید.\n"
+            "برای افزودن کارت جدید، روی دکمه 'افزودن کارت' کلیک کنید.",
+            reply_markup=get_auth_buttons()
+        )
+    
+    elif data == "add_card":
+        await query.edit_message_text(
+            "➕ افزودن کارت\n\n"
+            "لطفاً اطلاعات کارت خود را به صورت زیر وارد کنید:\n"
+            "شماره کارت: ۶۰۳۷*******\n"
+            "نام صاحب کارت: نام و نام خانوادگی\n"
+            "تاریخ انقضا: ۱۴۰۴/۰۱/۰۱\n"
+            "CVV2: ***",
+            reply_markup=get_auth_buttons()
+        )
+    
+    elif data == "remove_card":
+        await query.edit_message_text(
+            "➖ حذف کارت\n\n"
+            "لطفاً شماره کارتی که می‌خواهید حذف کنید را وارد کنید:",
+            reply_markup=get_auth_buttons()
         )
     
     elif data == "back_to_main":
@@ -239,6 +296,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(check_subscription, pattern="check_sub"))
     app.add_handler(CallbackQueryHandler(handle_balance_buttons, pattern="^(auth|buy_package|buy_question|back_to_main)$"))
+    app.add_handler(CallbackQueryHandler(handle_auth_buttons, pattern="^(card_list|add_card|remove_card|back_to_main)$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # شروع ربات
