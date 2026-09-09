@@ -191,10 +191,13 @@ def get_rules_buttons():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# دکمه‌های ریپلی کیبورد (منوی اصلی)
+# دکمه‌های ریپلی کیبورد (منوی اصلی) - با دکمه‌های جدید
 def get_main_menu_keyboard():
     keyboard = [
         [KeyboardButton("📚 ارسال سوال"), KeyboardButton("💸 افزایش موجودی")],
+        [KeyboardButton("👤 حساب من"), KeyboardButton("🤝 دعوت دوستان")],
+        [KeyboardButton("☎️ پشتیبانی"), KeyboardButton("📋 درباره ما")],
+        [KeyboardButton("🆘 قوانین"), KeyboardButton("📖 راهنما")],
         [KeyboardButton("🔙 برگشت")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -401,7 +404,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    if text == "📚 ارسال سوال":
+    # دکمه‌های جدید منوی اصلی - فقط نمایش داده می‌شوند و کاری نمی‌کنند
+    if text in ["👤 حساب من", "🤝 دعوت دوستان", "☎️ پشتیبانی", "📋 درباره ما", "🆘 قوانین", "📖 راهنما"]:
+        # این دکمه‌ها فعلاً هیچ کاری نمی‌کنند
+        # فقط برای نمایش هستند
+        pass
+    
+    elif text == "📚 ارسال سوال":
         await update.message.reply_text(
             "📚 لطفاً درس مورد نظر خود را انتخاب کنید.",
             reply_markup=get_lesson_keyboard()
