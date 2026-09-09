@@ -560,7 +560,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_menu_keyboard()
         )
     
-    # دکمه "درباره ما" - با ارسال عکس
+    # ✅ دکمه "درباره ما" - با ارسال عکس (اصلاح شد)
     elif text == "📋 درباره ما":
         await update.message.reply_photo(
             photo=ABOUT_IMAGE_URL,
@@ -601,8 +601,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
         await update.message.reply_text(
             "📱 لطفاً برای ادامه، شماره تلفن خود را ارسال کنید:",
-            reply_markup=reply_markup
-        )
+            reply_markup=reply_markup        )
     
     # انتخاب درس
     elif text in ["🧬 زیست", "🧪 شیمی", "⚡️ فیزیک", "📐 ریاضی"]:
