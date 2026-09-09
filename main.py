@@ -26,8 +26,18 @@ NOT_MEMBER_MSG = (
     "👇 سپس دوباره /start را بزنید"
 )
 
-# متن پیام برای کاربرانی که عضو شده‌اند
-WELCOME_MSG = "✅ خوش آمدید! ربات فعال شد 🎉"
+# متن پیام خوش‌آمدگویی جدید
+WELCOME_MSG = (
+    "سلام 👋\n"
+    "به ربات آموزشی VIOLEX خوش آمدید.\n"
+    "\n"
+    "📚 در این ربات می‌توانید سوالات درسی خود را برای دبیران متخصص ارسال کنید و پاسخ کامل دریافت کنید.\n"
+    "✅ پاسخ‌ها توسط دبیران بررسی می‌شود\n"
+    "✅ پرداخت‌ها از طریق درگاه امن انجام می‌شود\n"
+    "✅ تمام سفارش‌ها دارای کد پیگیری هستند\n"
+    "\n"
+    "یکی از گزینه‌های زیر را انتخاب کنید 👇"
+)
 
 # منوی اصلی
 MAIN_MENU_TEXT = (
@@ -191,7 +201,7 @@ def get_rules_buttons():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# دکمه‌های ریپلی کیبورد (منوی اصلی) - بدون دکمه برگشت
+# دکمه‌های ریپلی کیبورد (منوی اصلی)
 def get_main_menu_keyboard():
     keyboard = [
         [KeyboardButton("📚 ارسال سوال"), KeyboardButton("💸 افزایش موجودی")],
@@ -234,13 +244,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # بررسی عضویت کاربر
     if await is_user_member(context.application, user_id):
-        # اگر عضو است، پیام خوش‌آمدگویی بفرست
-        await update.message.reply_text(WELCOME_MSG)
-        # منوی اصلی را نمایش بده
+        # اگر عضو است، پیام خوش‌آمدگویی جدید بفرست (بدون منوی اصلی)
         await update.message.reply_text(
-            MAIN_MENU_TEXT,
-            reply_markup=get_main_menu_keyboard(),
-            parse_mode="Markdown"
+            WELCOME_MSG,
+            reply_markup=get_main_menu_keyboard()
         )
     else:
         # اگر عضو نیست، پیام عضویت اجباری را با دکمه‌ها بفرست
@@ -262,13 +269,10 @@ async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if await is_user_member(context.application, user_id):
         # اگر عضو شده، پیام قبلی را حذف کن
         await message.delete()
-        # پیام خوش‌آمدگویی جدید بفرست
-        await query.message.reply_text(WELCOME_MSG)
-        # منوی اصلی را نمایش بده
+        # پیام خوش‌آمدگویی جدید بفرست (بدون منوی اصلی)
         await query.message.reply_text(
-            MAIN_MENU_TEXT,
-            reply_markup=get_main_menu_keyboard(),
-            parse_mode="Markdown"
+            WELCOME_MSG,
+            reply_markup=get_main_menu_keyboard()
         )
     else:
         # اگر عضو نشده، پیام فعلی را با پیام جدید جایگزین کن
@@ -439,21 +443,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     
     elif text == "🔙 برگشت":
-        # برگشت به منوی احراز هویت (اگر در صفحه قوانین باشد)
-        if 'in_rules' in context.user_data and context.user_data['in_rules']:
-            await update.message.reply_text(
-                AUTH_TEXT,
-                reply_markup=get_auth_buttons(),
-                parse_mode="Markdown"
-            )
-            context.user_data['in_rules'] = False
-        else:
-            # برگشت به منوی اصلی
-            await update.message.reply_text(
-                MAIN_MENU_TEXT,
-                reply_markup=get_main_menu_keyboard(),
-                parse_mode="Markdown"
-            )
+        # برگشت به منوی اصلی
+        await update.message.reply_text(
+            MAIN_MENU_TEXT,
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode="Markdown"
+        )
     
     else:
         # پیام‌های دیگر
