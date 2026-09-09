@@ -191,14 +191,13 @@ def get_rules_buttons():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# دکمه‌های ریپلی کیبورد (منوی اصلی) - با دکمه‌های جدید
+# دکمه‌های ریپلی کیبورد (منوی اصلی) - بدون دکمه برگشت
 def get_main_menu_keyboard():
     keyboard = [
         [KeyboardButton("📚 ارسال سوال"), KeyboardButton("💸 افزایش موجودی")],
         [KeyboardButton("👤 حساب من"), KeyboardButton("🤝 دعوت دوستان")],
         [KeyboardButton("☎️ پشتیبانی"), KeyboardButton("📋 درباره ما")],
         [KeyboardButton("🆘 قوانین"), KeyboardButton("📖 راهنما")],
-        [KeyboardButton("🔙 برگشت")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -440,9 +439,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     
     elif text == "🔙 برگشت":
-        # بررسی که کاربر در کدام منو است
+        # برگشت به منوی احراز هویت (اگر در صفحه قوانین باشد)
         if 'in_rules' in context.user_data and context.user_data['in_rules']:
-            # برگشت به منوی احراز هویت
             await update.message.reply_text(
                 AUTH_TEXT,
                 reply_markup=get_auth_buttons(),
