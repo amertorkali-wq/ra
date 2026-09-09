@@ -170,6 +170,16 @@ CONFIRM_RULES_TEXT = (
     "*📨 لطفاً کد تأیید ارسال‌شده را وارد کنید.*"
 )
 
+# متن درباره ما
+ABOUT_US_TEXT = (
+    "📚 *در مسیر آمادگی برای کنکور، تمرین و حل تست یکی از مهم‌ترین بخش‌های یادگیری است.*\n"
+    "اما گاهی حتی با وجود پاسخنامه هم ممکن است روش حل سؤال را به‌ خوبی متوجه نشوید یا در بخشی از حل دچار ابهام شوید. 🤔\n"
+    "💠 *ویولکس دقیقاً برای همین ساخته شده است.*\n"
+    "فضایی برای *رفع اشکال دقیق و شخصی‌سازی‌شده* که در آن سؤالات شما توسط *دبیران متخصص هر درس* بررسی می‌شود و *پاسخ تشریحی و قابل فهم* دریافت می‌کنید. 👨‍🏫📖\n"
+    "✅ کافی است سؤال خود را ارسال کنید تا پاسخ آن توسط دبیر مربوطه بررسی و توضیح داده شود.\n"
+    "👨‍🏫 همچنین می‌توانید از طریق دکمه‌های *زیر این بخش*، با *دبیر هر درس و سوابق آموزشی آن‌ها* بیشتر آشنا شوید."
+)
+
 # دکمه‌های اینلاین (فقط برای عضویت اجباری)
 def get_force_buttons():
     keyboard = [
@@ -202,6 +212,16 @@ def get_auth_buttons():
 def get_rules_buttons():
     keyboard = [
         [InlineKeyboardButton("🔙 منوی اصلی", callback_data="back_to_main")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+# دکمه‌های اینلاین برای درباره ما (دکمه‌های درس - فقط نمایش)
+def get_about_buttons():
+    keyboard = [
+        [InlineKeyboardButton("🧬 زیست", callback_data="about_biology")],
+        [InlineKeyboardButton("🧪 شیمی", callback_data="about_chemistry")],
+        [InlineKeyboardButton("⚡️ فیزیک", callback_data="about_physics")],
+        [InlineKeyboardButton("📐 ریاضی", callback_data="about_math")],
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -273,15 +293,15 @@ def get_user_info(user_id: int) -> dict:
         user_data[user_id] = {
             'user_id': user_id,
             'name': generate_random_name(),
-            'phone': '**********',
-            'questions_left': 0,
-            'questions_used': 0,
-            'balance': 25000000,  # ریال
-            'active_package': '0',
-            'expiry_date': '-',
-            'referrals': 0,
-            'has_card': False,
-            'has_active_package': False
+            'phone': '0912***7890',
+            'questions_left': random.randint(0, 20),
+            'questions_used': random.randint(0, 50),
+            'balance': random.randint(1000000, 50000000),
+            'active_package': random.choice(['0', 'پایه', 'استاندارد', 'حرفه‌ای']),
+            'expiry_date': random.choice(['-', '1405/07/15', '1405/08/01', '1405/09/10']),
+            'referrals': random.randint(0, 15),
+            'has_card': random.choice([True, False]),
+            'has_active_package': random.choice([True, False])
         }
     return user_data[user_id]
 
@@ -443,6 +463,13 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
             parse_mode="Markdown"
         )
 
+# هندلر دکمه‌های درباره ما (فعلاً فقط نمایش)
+async def handle_about_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    # این دکمه‌ها فعلاً هیچ کاری نمی‌کنند
+    pass
+
 # هندلر دریافت شماره تلفن
 async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -482,18 +509,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # دکمه "حساب من"
     if text == "👤 حساب من":
         now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        # اطلاعات واقعی از دیتای کاربر
+        name_parts = user_info['name'].split()
+        first_name = name_parts[0] if len(name_parts) > 0 else "کاربر"
+        last_name = name_parts[1] if len(name_parts) > 1 else "عزیز"
+        
         await update.message.reply_text(
             f"👤 حساب من\n"
-            f"🆔 شناسه سیستمی شما:{user_id}\n"
-            f"🆔 آی دی:@support_violex\n"
-            f"👤 نام :{user_info['name']}\n"
-            f"📚 سوالات باقی مانده:{user_info['questions_left']}\n"
-            f"📅 سوالات استفاده شده:{user_info['questions_used']}\n"
-            f"💰 موجودی کیف پول:{user_info['balance']:,}ريال\n"
-            f"🎁 پکیج فعال:{user_info['active_package']}\n"
-            f"⏳ اعتبار تا:{user_info['expiry_date']}\n"
-            f"👤تعداد زیرمجموعه:{user_info['referrals']}\n"
-            f"⏳ زمان استعلام:{now}",
+            f"🆔 شناسه سیستمی شما: {user_id}\n"
+            f"🆔 آی دی: @support_violex\n"
+            f"👤 نام : {first_name} | {last_name}\n"
+            f"📚 سوالات باقی مانده: {user_info['questions_left']}\n"
+            f"📅 سوالات استفاده شده: {user_info['questions_used']}\n"
+            f"💰 موجودی کیف پول: {user_info['balance']:,} ريال\n"
+            f"🎁 پکیج فعال: {user_info['active_package']}\n"
+            f"⏳ اعتبار تا: {user_info['expiry_date']}\n"
+            f"👤 تعداد زیرمجموعه: {user_info['referrals']}\n"
+            f"⏳ زمان استعلام: {now}",
             reply_markup=get_main_menu_keyboard()
         )
     
@@ -525,8 +557,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_menu_keyboard()
         )
     
+    # دکمه "درباره ما"
+    elif text == "📋 درباره ما":
+        await update.message.reply_text(
+            ABOUT_US_TEXT,
+            reply_markup=get_about_buttons(),
+            parse_mode="Markdown"
+        )
+    
     # دکمه‌های منوی اصلی که فعلاً کاری نمی‌کنند
-    elif text in ["☎️ پشتیبانی", "📋 درباره ما", "🆘 قوانین", "📖 راهنما"]:
+    elif text in ["☎️ پشتیبانی", "🆘 قوانین", "📖 راهنما"]:
         # این دکمه‌ها فعلاً هیچ کاری نمی‌کنند
         pass
     
@@ -602,6 +642,7 @@ def main():
     app.add_handler(CallbackQueryHandler(check_subscription, pattern="check_sub"))
     app.add_handler(CallbackQueryHandler(handle_balance_buttons, pattern="^(auth|buy_package|buy_question|back_to_main)$"))
     app.add_handler(CallbackQueryHandler(handle_auth_buttons, pattern="^(card_list|add_card|remove_card|back_to_main)$"))
+    app.add_handler(CallbackQueryHandler(handle_about_buttons, pattern="^(about_biology|about_chemistry|about_physics|about_math)$"))
     app.add_handler(MessageHandler(filters.CONTACT, handle_contact))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
