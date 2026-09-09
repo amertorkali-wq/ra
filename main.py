@@ -1,4 +1,6 @@
 import asyncio
+import random
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
@@ -8,6 +10,8 @@ TOKEN = "8762301184:AAGbn9CZirNf7Yc9nRdnBpQMfFGEnu8r9wA"
 CHANNEL_ID = -1003858232624
 # لینک کانال (برای دکمه)
 CHANNEL_LINK = "https://t.me/violex_official"
+# لینک ربات برای دعوت
+BOT_LINK = "https://ble.ir/VIOLEXQ_BOT?start="
 
 # متن پیام اولیه (عضویت اجباری)
 FORCE_MSG = (
@@ -228,6 +232,20 @@ def get_lesson_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
+# دکمه‌های اینلاین برای پیام "خرید پکیج" بعد از انتخاب درس
+def get_buy_package_button():
+    keyboard = [
+        [InlineKeyboardButton("خرید پکیج 📦", callback_data="buy_package")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+# دکمه‌های اینلاین برای پیام "احراز هویت" بعد از خرید پکیج
+def get_auth_button():
+    keyboard = [
+        [InlineKeyboardButton("احراز هویت 🪪", callback_data="auth")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
 # تابع بررسی عضویت کاربر در کانال
 async def is_user_member(application: Application, user_id: int) -> bool:
     try:
@@ -237,14 +255,47 @@ async def is_user_member(application: Application, user_id: int) -> bool:
         print(f"Error checking membership: {e}")
         return False
 
+# تابع تولید لینک دعوت
+def get_referral_link(user_id: int) -> str:
+    return f"{BOT_LINK}{user_id}"
+
+# تابع تولید نام تصادفی
+def generate_random_name() -> str:
+    first_names = ["علی", "محمد", "حسین", "رضا", "مهدی", "سارا", "فاطمه", "زهرا", "نگین", "آرین"]
+    last_names = ["احمدی", "محمدی", "کریمی", "رضایی", "حسینی", "یزدانی", "نوری", "موسوی", "صادقی", "مرادی"]
+    return f"{random.choice(first_names)} {random.choice(last_names)}"
+
+# دیتای کاربران (در حالت واقعی از دیتابیس استفاده می‌شود)
+user_data = {}
+
+def get_user_info(user_id: int) -> dict:
+    if user_id not in user_data:
+        user_data[user_id] = {
+            'user_id': user_id,
+            'name': generate_random_name(),
+            'phone': '**********',
+            'questions_left': 0,
+            'questions_used': 0,
+            'balance': 25000000,  # ریال
+            'active_package': '0',
+            'expiry_date': '-',
+            'referrals': 0,
+            'has_card': False,
+            'has_active_package': False
+        }
+    return user_data[user_id]
+
 # هندلر دستور /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
+    
+    # ذخیره اطلاعات کاربر
+    get_user_info(user_id)
 
     # بررسی عضویت کاربر
     if await is_user_member(context.application, user_id):
-        # اگر عضو است، پیام خوش‌آمدگویی جدید بفرست (بدون منوی اصلی)
+        # اگر عضو است، پیام خوش‌آمدگویی جدید بفرست
         await update.message.reply_text(
             WELCOME_MSG,
             reply_markup=get_main_menu_keyboard()
@@ -269,7 +320,7 @@ async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if await is_user_member(context.application, user_id):
         # اگر عضو شده، پیام قبلی را حذف کن
         await message.delete()
-        # پیام خوش‌آمدگویی جدید بفرست (بدون منوی اصلی)
+        # پیام خوش‌آمدگویی جدید بفرست
         await query.message.reply_text(
             WELCOME_MSG,
             reply_markup=get_main_menu_keyboard()
@@ -297,15 +348,24 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
         )
     
     elif data == "buy_package":
-        await query.edit_message_text(
-            "📦 خرید پکیج\n\n"
-            "پکیج‌های موجود:\n"
-            "1️⃣ پکیج پایه - ۱۰۰,۰۰۰ تومان\n"
-            "2️⃣ پکیج استاندارد - ۲۵۰,۰۰۰ تومان\n"
-            "3️⃣ پکیج حرفه‌ای - ۵۰۰,۰۰۰ تومان\n\n"
-            "لطفاً شماره پکیج مورد نظر را وارد کنید.",
-            reply_markup=get_balance_buttons()
-        )
+        # بررسی اینکه کاربر کارت دارد یا نه
+        user_info = get_user_info(query.from_user.id)
+        if not user_info['has_card']:
+            await query.edit_message_text(
+                "*❗ شما هنوز کارت بانکی فعالی ثبت نکرده‌اید. لطفاً از بخش «احراز هویت» برای افزودن کارت اقدام کنید.*",
+                reply_markup=get_auth_button(),
+                parse_mode="Markdown"
+            )
+        else:
+            await query.edit_message_text(
+                "📦 خرید پکیج\n\n"
+                "پکیج‌های موجود:\n"
+                "1️⃣ پکیج پایه - ۱۰۰,۰۰۰ تومان\n"
+                "2️⃣ پکیج استاندارد - ۲۵۰,۰۰۰ تومان\n"
+                "3️⃣ پکیج حرفه‌ای - ۵۰۰,۰۰۰ تومان\n\n"
+                "لطفاً شماره پکیج مورد نظر را وارد کنید.",
+                reply_markup=get_balance_buttons()
+            )
     
     elif data == "buy_question":
         await query.edit_message_text(
@@ -331,34 +391,47 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.answer()
     
     data = query.data
+    user_id = query.from_user.id
+    user_info = get_user_info(user_id)
     
     if data == "card_list":
-        await query.edit_message_text(
-            "🧾 لیست کارت‌ها\n\n"
-            "شما هیچ کارتی ثبت نکرده‌اید.\n"
-            "برای افزودن کارت جدید، روی دکمه 'افزودن کارت' کلیک کنید.",
-            reply_markup=get_auth_buttons()
-        )
+        if user_info['has_card']:
+            await query.edit_message_text(
+                "🧾 لیست کارت‌ها\n\n"
+                "✅ شما یک کارت فعال دارید.\n"
+                f"شماره کارت: ۶۰۳۷****{random.randint(1000, 9999)}",
+                reply_markup=get_auth_buttons()
+            )
+        else:
+            await query.edit_message_text(
+                "🧾 لیست کارت‌ها\n\n"
+                "شما هیچ کارتی ثبت نکرده‌اید.\n"
+                "برای افزودن کارت جدید، روی دکمه 'افزودن کارت' کلیک کنید.",
+                reply_markup=get_auth_buttons()
+            )
     
     elif data == "add_card":
-        # نمایش قوانین با دکمه‌های جدید
+        # کاربر کارت اضافه می‌کند
+        user_info['has_card'] = True
         await query.edit_message_text(
-            RULES_TEXT,
-            reply_markup=get_rules_buttons(),
-            parse_mode="Markdown"
-        )
-        # همچنین دکمه‌های ریپلی کیبورد را نمایش بده
-        await query.message.reply_text(
-            "📱 لطفاً برای ادامه، شماره خود را ارسال کنید:",
-            reply_markup=get_rules_keyboard()
+            "✅ کارت شما با موفقیت ثبت شد!\n\n"
+            "شماره کارت: ۶۰۳۷****1234\n"
+            "نام صاحب کارت: صاحب حساب",
+            reply_markup=get_auth_buttons()
         )
     
     elif data == "remove_card":
-        await query.edit_message_text(
-            "➖ حذف کارت\n\n"
-            "لطفاً شماره کارتی که می‌خواهید حذف کنید را وارد کنید:",
-            reply_markup=get_auth_buttons()
-        )
+        if user_info['has_card']:
+            user_info['has_card'] = False
+            await query.edit_message_text(
+                "✅ کارت شما با موفقیت حذف شد.",
+                reply_markup=get_auth_buttons()
+            )
+        else:
+            await query.edit_message_text(
+                "⚠️ شما هیچ کارتی برای حذف ندارید.",
+                reply_markup=get_auth_buttons()
+            )
     
     elif data == "back_to_main":
         # حذف پیام قبلی
@@ -385,9 +458,6 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
             CONFIRM_RULES_TEXT,
             parse_mode="Markdown"
         )
-        
-        # بعداً اینجا می‌توانید کد تأیید پیامکی ارسال کنید
-        # و منطق تأیید را اضافه کنید
     else:
         await update.message.reply_text(
             "⚠️ لطفاً شماره خود را از طریق دکمه 'ثبت شماره خود' ارسال کنید.",
@@ -398,6 +468,8 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     text = update.message.text
+    user_id = user.id
+    user_info = get_user_info(user_id)
     
     # بررسی عضویت برای همه‌ی پیام‌ها
     if not await is_user_member(context.application, user.id):
@@ -407,17 +479,71 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # دکمه‌های جدید منوی اصلی - فقط نمایش داده می‌شوند و کاری نمی‌کنند
-    if text in ["👤 حساب من", "🤝 دعوت دوستان", "☎️ پشتیبانی", "📋 درباره ما", "🆘 قوانین", "📖 راهنما"]:
+    # دکمه "حساب من"
+    if text == "👤 حساب من":
+        now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        await update.message.reply_text(
+            f"👤 حساب من\n"
+            f"🆔 شناسه سیستمی شما:{user_id}\n"
+            f"🆔 آی دی:@support_violex\n"
+            f"👤 نام :{user_info['name']}\n"
+            f"📚 سوالات باقی مانده:{user_info['questions_left']}\n"
+            f"📅 سوالات استفاده شده:{user_info['questions_used']}\n"
+            f"💰 موجودی کیف پول:{user_info['balance']:,}ريال\n"
+            f"🎁 پکیج فعال:{user_info['active_package']}\n"
+            f"⏳ اعتبار تا:{user_info['expiry_date']}\n"
+            f"👤تعداد زیرمجموعه:{user_info['referrals']}\n"
+            f"⏳ زمان استعلام:{now}",
+            reply_markup=get_main_menu_keyboard()
+        )
+    
+    # دکمه "دعوت دوستان"
+    elif text == "🤝 دعوت دوستان":
+        referral_link = get_referral_link(user_id)
+        await update.message.reply_text(
+            f"🚀 VIOLEX | کلینیک VIP رفع اشکال\n"
+            f"✨ یادگیری با لذت، موفقیت با اطمینان\n\n"
+            f"اگه توی حل تست‌ها هنوز بعضی نکات رو کامل متوجه نشدی یا موقع تست‌زنی یه جاهایی گیر می‌کنی،\n"
+            f"وقتشه وارد جمع حرفه‌ای‌ها بشی!\n\n"
+            f"💎 ویولِکس دقیقا برای همین ساخته شده:\n"
+            f"فقط سؤال رو بفرست،\n"
+            f"و در کوتاه‌ترین زمان، دبیر تخصصیِ همون درس، برات شخصی‌سازی‌شده،سوال را رفع اشکال می‌کنه.\n\n"
+            f"🔥 اگه می‌خوای تو هم از این تجربه خاص استفاده کنی، از همین لینک شروع کن:\n"
+            f"{referral_link}\n"
+            f"ویولکس مسیر یادگیری رو برات هموار می‌کنه."
+        )
+        await update.message.reply_text(
+            f"👥لینک دعوتتو برای دوستات بفرست تا اونا هم استفاده کنن؛ هرکی با لینک تو وارد بشه، یه هدیه برات ثبت میشه.\n\n"
+            f"🎁 هدیه ما به شما برای هر دعوت موفق:  \n"
+            f"۴٬۰۰۰ تومان\n\n"
+            f"📢 هر کاربری که:\n"
+            f"1️⃣ از طریق لینک شما وارد ربات شود  \n"
+            f"2️⃣ ربات را استارت کند \n"
+            f"3️⃣ در کانال عضو شود\n"
+            f"✅ به عنوان زیرمجموعه شما ثبت می‌شود.\n"
+            f"💰 بابت هر زیرمجموعه:  4,000 تومان به کیف پول شما اضافه خواهد شد.",
+            reply_markup=get_main_menu_keyboard()
+        )
+    
+    # دکمه‌های منوی اصلی که فعلاً کاری نمی‌کنند
+    elif text in ["☎️ پشتیبانی", "📋 درباره ما", "🆘 قوانین", "📖 راهنما"]:
         # این دکمه‌ها فعلاً هیچ کاری نمی‌کنند
-        # فقط برای نمایش هستند
         pass
     
+    # دکمه "ارسال سوال"
     elif text == "📚 ارسال سوال":
-        await update.message.reply_text(
-            "📚 لطفاً درس مورد نظر خود را انتخاب کنید.",
-            reply_markup=get_lesson_keyboard()
-        )
+        # بررسی اینکه کاربر پکیج فعال دارد یا نه
+        if not user_info['has_active_package']:
+            await update.message.reply_text(
+                "❌ شما هیچ پکیج فعالی ندارید؛ برای ثبت سؤال ابتدا از بخش *«خرید پکیج»* اشتراک موردنظر خود را تهیه کنید.",
+                reply_markup=get_buy_package_button(),
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                "📚 لطفاً درس مورد نظر خود را انتخاب کنید.",
+                reply_markup=get_lesson_keyboard()
+            )
     
     elif text == "💸 افزایش موجودی":
         await update.message.reply_text(
@@ -434,13 +560,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup
         )
     
+    # انتخاب درس
     elif text in ["🧬 زیست", "🧪 شیمی", "⚡️ فیزیک", "📐 ریاضی"]:
-        await update.message.reply_text(
-            f"✅ درس {text} انتخاب شد!\n\n"
-            "📝 لطفاً سوال خود را به همراه فایل (در صورت وجود) ارسال کنید.\n"
-            "پشتیبانان ما در اسرع وقت پاسخ خواهند داد.",
-            reply_markup=get_lesson_keyboard()
-        )
+        # بررسی اینکه کاربر پکیج فعال دارد یا نه
+        if not user_info['has_active_package']:
+            await update.message.reply_text(
+                "❌ شما هیچ پکیج فعالی ندارید؛ برای ثبت سؤال ابتدا از بخش *«خرید پکیج»* اشتراک موردنظر خود را تهیه کنید.",
+                reply_markup=get_buy_package_button(),
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                f"✅ درس {text} انتخاب شد!\n\n"
+                "📝 لطفاً سوال خود را به همراه فایل (در صورت وجود) ارسال کنید.\n"
+                "پشتیبانان ما در اسرع وقت پاسخ خواهند داد.",
+                reply_markup=get_lesson_keyboard()
+            )
     
     elif text == "🔙 برگشت":
         # برگشت به منوی اصلی
