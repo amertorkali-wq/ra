@@ -13,6 +13,9 @@ CHANNEL_LINK = "https://t.me/violex_official"
 # لینک ربات برای دعوت
 BOT_LINK = "https://ble.ir/VIOLEXQ_BOT?start="
 
+# 🔴 لینک عکس درباره ما را اینجا قرار دهید 🔴
+ABOUT_IMAGE_URL = "https://your-image-link.com/violex-about.jpg"  # <-- لینک عکس خود را جایگزین کنید
+
 # متن پیام اولیه (عضویت اجباری)
 FORCE_MSG = (
     "سلام 👋\n"
@@ -557,10 +560,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_menu_keyboard()
         )
     
-    # دکمه "درباره ما"
+    # دکمه "درباره ما" - با ارسال عکس
     elif text == "📋 درباره ما":
-        await update.message.reply_text(
-            ABOUT_US_TEXT,
+        await update.message.reply_photo(
+            photo=ABOUT_IMAGE_URL,
+            caption=ABOUT_US_TEXT,
             reply_markup=get_about_buttons(),
             parse_mode="Markdown"
         )
