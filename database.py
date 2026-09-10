@@ -9,6 +9,7 @@ def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
+    # جدول کاربران
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -16,6 +17,7 @@ def init_db():
             first_name TEXT,
             last_name TEXT,
             phone TEXT,
+            verification_code TEXT,
             wallet INTEGER DEFAULT 0,
             questions_remaining INTEGER DEFAULT 0,
             questions_used INTEGER DEFAULT 0,
@@ -31,6 +33,7 @@ def init_db():
         )
     ''')
 
+    # جدول کارت‌ها
     c.execute('''
         CREATE TABLE IF NOT EXISTS cards (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,6 +47,7 @@ def init_db():
         )
     ''')
 
+    # جدول سوالات
     c.execute('''
         CREATE TABLE IF NOT EXISTS questions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,6 +65,7 @@ def init_db():
         )
     ''')
 
+    # جدول تراکنش‌ها
     c.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,6 +79,7 @@ def init_db():
         )
     ''')
 
+    # جدول تیکت‌ها
     c.execute('''
         CREATE TABLE IF NOT EXISTS tickets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,6 +92,7 @@ def init_db():
         )
     ''')
 
+    # جدول کارکنان
     c.execute('''
         CREATE TABLE IF NOT EXISTS staff (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,6 +104,7 @@ def init_db():
         )
     ''')
 
+    # جدول تنظیمات
     c.execute('''
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
@@ -110,23 +118,20 @@ def init_db():
 
 
 # ============================================
-# توابع کمکی تاریخ شمسی
+# توابع تاریخ شمسی
 # ============================================
 
 def get_shamsi_now():
-    """تاریخ و ساعت شمسی فعلی"""
     now = jdatetime.datetime.now()
     return now.strftime("%Y/%m/%d %H:%M:%S")
 
 
 def get_shamsi_date():
-    """تاریخ شمسی بدون ساعت"""
     now = jdatetime.datetime.now()
     return now.strftime("%Y/%m/%d")
 
 
 def get_shamsi_future_date(days):
-    """تاریخ شمسی بعد از N روز"""
     future = jdatetime.datetime.now() + jdatetime.timedelta(days=days)
     return future.strftime("%Y/%m/%d")
 
@@ -192,7 +197,6 @@ def reward_inviter(invited_user_id):
         conn.close()
         return None
 
-    # بررسی وجود دعوت‌کننده
     c.execute("SELECT wallet, referrals, questions_remaining FROM users WHERE user_id = ?", (inviter_id,))
     inviter = c.fetchone()
     if not inviter:
@@ -284,6 +288,27 @@ def get_staff_list(role):
     rows = c.fetchall()
     conn.close()
     return rows
+
+
+# ============================================
+# توابع کد تأیید
+# ============================================
+
+def set_verification_code(user_id, code):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("UPDATE users SET verification_code = ? WHERE user_id = ?", (code, user_id))
+    conn.commit()
+    conn.close()
+
+
+def get_verification_code(user_id):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT verification_code FROM users WHERE user_id = ?", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else None
 
 
 # ============================================

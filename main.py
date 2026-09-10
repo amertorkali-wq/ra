@@ -1,4 +1,4 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
     MessageHandler, filters, ContextTypes
@@ -11,53 +11,39 @@ from handlers import user_panel, teacher_panel, support_panel
 from handlers import accountant_panel, admin_panel
 
 
-# ============================================
-# مسیریاب پیام‌های متنی
-# ============================================
-
 async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # 1) پنل مدیریت
     try:
         if await admin_panel.handle_admin_input(update, context):
             return
     except Exception as e:
-        print(f"Admin input error: {e}")
+        print(f"Admin error: {e}")
 
-    # 2) پنل حسابداری
     try:
         if await accountant_panel.handle_card_reject_reason(update, context):
             return
     except Exception as e:
         print(f"Accountant error: {e}")
 
-    # 3) پنل دبیران (سوال تکمیلی)
     try:
         if await teacher_panel.handle_followup(update, context):
             return
     except Exception as e:
-        print(f"Teacher followup error: {e}")
+        print(f"Teacher error: {e}")
 
-    # 4) پنل پشتیبانی
     if context.user_data.get('active_ticket_id'):
         user_id = update.effective_user.id
         if support_panel.is_support(user_id):
             await support_panel.support_send_reply(update, context)
             return
 
-    # 5) پنل دبیران (در حال پاسخ)
     if context.user_data.get('active_question_id'):
         user_id = update.effective_user.id
         if teacher_panel.is_teacher(user_id):
             await teacher_panel.teacher_send_answer(update, context)
             return
 
-    # 6) پنل عمومی
     await user_panel.handle_message(update, context)
 
-
-# ============================================
-# مسیریاب پیام‌های عکس
-# ============================================
 
 async def photo_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get('active_question_id'):
@@ -69,33 +55,22 @@ async def photo_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await user_panel.handle_photo(update, context)
 
 
-# ============================================
-# مسیریاب مخاطبین
-# ============================================
-
 async def contact_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await user_panel.handle_contact(update, context)
 
-
-# ============================================
-# مسیریاب دکمه‌های شیشه‌ای
-# ============================================
 
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data or ""
 
-    # ---- بررسی عضویت ----
     if data == "check_sub":
         await user_panel.check_subscription(update, context)
         return
 
-    # ---- پنل مدیریت ----
     if data.startswith("adm_"):
         await admin_panel.handle_admin_buttons(update, context)
         return
 
-    # ---- پنل حسابداری ----
     if data.startswith("acc_"):
         if data.startswith("acc_verify_"):
             await accountant_panel.acc_verify_card(update, context)
@@ -107,7 +82,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await accountant_panel.acc_reject_transaction(update, context)
         return
 
-    # ---- پنل دبیران ----
     if data.startswith("t_answer_"):
         await teacher_panel.teacher_answer(update, context)
         return
@@ -115,7 +89,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await teacher_panel.teacher_close(update, context)
         return
 
-    # ---- پاسخ دانش‌آموز ----
     if data.startswith("s_understood_"):
         await teacher_panel.student_understood(update, context)
         return
@@ -123,7 +96,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await teacher_panel.student_followup(update, context)
         return
 
-    # ---- پنل پشتیبانی ----
     if data.startswith("sup_answer_"):
         await support_panel.support_answer(update, context)
         return
@@ -131,22 +103,18 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await support_panel.support_close(update, context)
         return
 
-    # ---- دکمه‌های درباره ما ----
     if data in ("about_biology", "about_chemistry", "about_physics", "about_math"):
         await teacher_panel.show_teacher_bio(update, context)
         return
 
-    # ---- بازگشت از درباره ما ----
     if data == "about_back":
         await teacher_panel.back_to_about(update, context)
         return
 
-    # ---- دکمه‌های احراز هویت ----
     if data in ("auth", "card_list", "add_card", "remove_card") or data.startswith("del_card_"):
         await user_panel.handle_auth_buttons(update, context)
         return
 
-    # ---- دکمه‌های افزایش موجودی ----
     if data in ("buy_package", "buy_question", "back_to_main", "back_to_balance",
                 "pay_wallet", "pay_gateway", "paid_check"):
         await user_panel.handle_balance_buttons(update, context)
@@ -156,25 +124,15 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await user_panel.handle_balance_buttons(update, context)
         return
 
-    # ---- پیش‌فرض ----
     await query.answer("⚠️ این دکمه فعال نیست.", show_alert=False)
 
-
-# ============================================
-# دستور /admin
-# ============================================
 
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await admin_panel.admin_command(update, context)
 
 
-# ============================================
-# تابع اصلی
-# ============================================
-
 def main():
     init_db()
-
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", user_panel.start))

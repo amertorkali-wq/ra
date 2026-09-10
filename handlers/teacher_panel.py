@@ -4,7 +4,7 @@ from telegram.ext import ContextTypes
 
 from config import SUBJECTS
 from database import (
-    get_question, update_question, is_staff
+    get_question, update_question, is_staff, get_user, get_shamsi_now
 )
 from keyboards import (
     get_teacher_close_button, get_student_answer_buttons
@@ -12,17 +12,9 @@ from keyboards import (
 from texts import TEACHER_ANSWER_REQUEST, TEACHER_BUSY, ABOUT_US_TEXT
 
 
-# ============================================
-# بررسی دبیر بودن کاربر
-# ============================================
-
 def is_teacher(user_id):
     return is_staff(user_id, role="teacher") or is_staff(user_id, role="owner") or is_staff(user_id, role="admin")
 
-
-# ============================================
-# اطلاعات دبیران (بیوگرافی)
-# ============================================
 
 TEACHER_BIOS = {
     "زیست": (
@@ -85,10 +77,6 @@ TEACHER_BIOS = {
 }
 
 
-# ============================================
-# دکمه "پاسخ دادن" توسط دبیر
-# ============================================
-
 async def teacher_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
 
@@ -120,7 +108,7 @@ async def teacher_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.answer("✅ سؤال به شما تخصیص داده شد.")
 
-    now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+    now = get_shamsi_now()
     update_question(
         question_id,
         status='taken',
@@ -141,10 +129,6 @@ async def teacher_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         TEACHER_ANSWER_REQUEST.format(code=question[3])
     )
 
-
-# ============================================
-# دریافت پاسخ دبیر
-# ============================================
 
 async def teacher_send_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -176,10 +160,6 @@ async def teacher_send_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         print(f"Error sending answer to student: {e}")
 
 
-# ============================================
-# بستن سؤال توسط دبیر
-# ============================================
-
 async def teacher_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
 
@@ -201,7 +181,7 @@ async def teacher_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.answer("✅ سؤال بسته شد.")
 
-    now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+    now = get_shamsi_now()
     update_question(question_id, status='answered', closed_time=now)
 
     if context.user_data.get('active_question_id') == question_id:
@@ -217,12 +197,17 @@ async def teacher_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     student_id = question[1]
+    student = get_user(student_id)
+    questions_left = student[7] if student else 0
+
     try:
         await context.bot.send_message(
             chat_id=student_id,
             text=(
                 f"✅ پاسخ سؤال شما ارسال شد.\n\n"
+                f"📚 درس: {question[2]}\n"
                 f"🆔 کد سؤال: {question[3]}\n\n"
+                f"📚 سوالات باقی‌مانده شما: {questions_left}\n\n"
                 f"آیا متوجه شدید؟"
             ),
             reply_markup=get_student_answer_buttons(question_id)
@@ -231,16 +216,12 @@ async def teacher_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"Error sending to student: {e}")
 
 
-# ============================================
-# دکمه "متوجه شدم"
-# ============================================
-
 async def student_understood(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer("✅ خوشحالیم که متوجه شدید!")
 
     question_id = int(query.data.split("_")[3])
-    now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+    now = get_shamsi_now()
     update_question(question_id, status='closed', closed_time=now)
 
     try:
@@ -251,10 +232,6 @@ async def student_understood(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except:
         pass
 
-
-# ============================================
-# دکمه "سوال تکمیلی"
-# ============================================
 
 async def student_followup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -313,12 +290,7 @@ async def handle_followup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return True
 
 
-# ============================================
-# نمایش اطلاعات دبیر (درباره ما - با ویرایش پیام)
-# ============================================
-
 async def show_teacher_bio(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نمایش اطلاعات دبیر با ویرایش پیام"""
     query = update.callback_query
     await query.answer()
 
@@ -352,7 +324,6 @@ async def show_teacher_bio(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def back_to_about(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """بازگشت به منوی درباره ما"""
     query = update.callback_query
     await query.answer()
 

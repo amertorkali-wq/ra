@@ -14,10 +14,6 @@ from keyboards import (
 )
 
 
-# ============================================
-# بررسی مالک/ادمین
-# ============================================
-
 def is_admin(user_id):
     return user_id == OWNER_ID or is_staff(user_id, role="admin")
 
@@ -25,10 +21,6 @@ def is_admin(user_id):
 def is_owner(user_id):
     return user_id == OWNER_ID
 
-
-# ============================================
-# دستور /admin
-# ============================================
 
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -44,10 +36,6 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# ============================================
-# دکمه‌های پنل مدیریت
-# ============================================
-
 async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -58,7 +46,6 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.answer("⛔ دسترسی ندارید.", show_alert=True)
         return
 
-    # ---- بازگشت ----
     if data == "adm_back":
         await query.edit_message_text(
             "🎛 پنل مدیریت VIOLEX\n\n"
@@ -66,7 +53,6 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=get_admin_panel_keyboard()
         )
 
-    # ---- آمار ----
     elif data == "adm_stats":
         stats = get_stats()
         text = (
@@ -89,19 +75,14 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             f"💰 گزارش مالی\n\n"
             f"💵 کل درآمد: {stats['income']:,} تومان"
         )
-        await query.edit_message_text(
-            text,
-            reply_markup=get_admin_back_button()
-        )
+        await query.edit_message_text(text, reply_markup=get_admin_back_button())
 
-    # ---- مدیریت دبیران ----
     elif data == "adm_manage_teachers":
         await query.edit_message_text(
             "👨‍🏫 مدیریت دبیران\n\nلطفاً یک گزینه را انتخاب کنید:",
             reply_markup=get_teacher_management_buttons()
         )
 
-    # ---- لیست دبیران ----
     elif data == "adm_teacher_list":
         teachers = get_staff_list("teacher")
         if not teachers:
@@ -112,17 +93,14 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
                 text += f"{i}. 🆔 {tid} - درس: {subj or 'نامشخص'}\n"
         await query.edit_message_text(text, reply_markup=get_teacher_management_buttons())
 
-    # ---- افزودن دبیر ----
     elif data == "adm_teacher_add":
         await query.edit_message_text(
             "➕ افزودن دبیر\n\n"
-            "لطفاً آیدی عددی دبیر را ارسال کنید.\n\n"
-            "⚠️ دبیر باید ابتدا ربات را استارت کرده باشد.",
+            "لطفاً آیدی عددی دبیر را ارسال کنید:",
             reply_markup=get_admin_back_button()
         )
         context.user_data['adm_state'] = 'awaiting_teacher_id'
 
-    # ---- حذف دبیر ----
     elif data == "adm_teacher_remove":
         await query.edit_message_text(
             "🗑 حذف دبیر\n\n"
@@ -131,7 +109,6 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         context.user_data['adm_state'] = 'awaiting_remove_teacher_id'
 
-    # ---- اتصال دبیر به درس ----
     elif data == "adm_teacher_connect":
         await query.edit_message_text(
             "🔁 اتصال دبیر به درس\n\n"
@@ -140,11 +117,9 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         context.user_data['adm_state'] = 'awaiting_connect_teacher_id'
 
-    # ---- مدیریت ادمین ----
     elif data == "adm_manage_admins":
         await query.edit_message_text(
-            "👤 مدیریت ادمین‌ها\n\n"
-            "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+            "👤 مدیریت ادمین‌ها\n\nلطفاً یکی از گزینه‌ها را انتخاب کنید:",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("➕ افزودن ادمین", callback_data="adm_admin_add")],
                 [InlineKeyboardButton("🗑 حذف ادمین", callback_data="adm_admin_remove")],
@@ -168,8 +143,7 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.answer("⛔ فقط مالک می‌تواند ادمین اضافه کند.", show_alert=True)
             return
         await query.edit_message_text(
-            "➕ افزودن ادمین\n\n"
-            "لطفاً آیدی عددی ادمین را ارسال کنید:",
+            "➕ افزودن ادمین\n\nلطفاً آیدی عددی ادمین را ارسال کنید:",
             reply_markup=get_admin_back_button()
         )
         context.user_data['adm_state'] = 'awaiting_admin_id'
@@ -179,24 +153,20 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.answer("⛔ فقط مالک می‌تواند ادمین حذف کند.", show_alert=True)
             return
         await query.edit_message_text(
-            "🗑 حذف ادمین\n\n"
-            "لطفاً آیدی عددی ادمین را ارسال کنید:",
+            "🗑 حذف ادمین\n\nلطفاً آیدی عددی ادمین را ارسال کنید:",
             reply_markup=get_admin_back_button()
         )
         context.user_data['adm_state'] = 'awaiting_remove_admin_id'
 
-    # ---- مدیریت کادر ----
     elif data == "adm_manage_staff":
         await query.edit_message_text(
-            "🧑🏻‍💻 مدیریت کادر\n\n"
-            "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+            "🧑🏻‍💻 مدیریت کادر\n\nلطفاً یکی از گزینه‌ها را انتخاب کنید:",
             reply_markup=get_staff_management_buttons()
         )
 
     elif data == "adm_support_manage":
         await query.edit_message_text(
-            "☎️ مدیریت پشتیبان‌ها\n\n"
-            "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+            "☎️ مدیریت پشتیبان‌ها\n\nلطفاً یکی از گزینه‌ها را انتخاب کنید:",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("➕ افزودن پشتیبان", callback_data="adm_sup_add")],
                 [InlineKeyboardButton("🗑 حذف پشتیبان", callback_data="adm_sup_remove")],
@@ -220,8 +190,7 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.answer("⛔ فقط مالک.", show_alert=True)
             return
         await query.edit_message_text(
-            "➕ افزودن پشتیبان\n\n"
-            "لطفاً آیدی عددی پشتیبان را ارسال کنید:",
+            "➕ افزودن پشتیبان\n\nلطفاً آیدی عددی پشتیبان را ارسال کنید:",
             reply_markup=get_admin_back_button()
         )
         context.user_data['adm_state'] = 'awaiting_support_id'
@@ -231,16 +200,14 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.answer("⛔ فقط مالک.", show_alert=True)
             return
         await query.edit_message_text(
-            "🗑 حذف پشتیبان\n\n"
-            "لطفاً آیدی عددی پشتیبان را ارسال کنید:",
+            "🗑 حذف پشتیبان\n\nلطفاً آیدی عددی پشتیبان را ارسال کنید:",
             reply_markup=get_admin_back_button()
         )
         context.user_data['adm_state'] = 'awaiting_remove_support_id'
 
     elif data == "adm_accountant_manage":
         await query.edit_message_text(
-            "🧮 مدیریت حسابدارها\n\n"
-            "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+            "🧮 مدیریت حسابدارها\n\nلطفاً یکی از گزینه‌ها را انتخاب کنید:",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("➕ افزودن حسابدار", callback_data="adm_acc_add")],
                 [InlineKeyboardButton("🗑 حذف حسابدار", callback_data="adm_acc_remove")],
@@ -264,8 +231,7 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.answer("⛔ فقط مالک.", show_alert=True)
             return
         await query.edit_message_text(
-            "➕ افزودن حسابدار\n\n"
-            "لطفاً آیدی عددی حسابدار را ارسال کنید:",
+            "➕ افزودن حسابدار\n\nلطفاً آیدی عددی حسابدار را ارسال کنید:",
             reply_markup=get_admin_back_button()
         )
         context.user_data['adm_state'] = 'awaiting_accountant_id'
@@ -275,61 +241,48 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.answer("⛔ فقط مالک.", show_alert=True)
             return
         await query.edit_message_text(
-            "🗑 حذف حسابدار\n\n"
-            "لطفاً آیدی عددی حسابدار را ارسال کنید:",
+            "🗑 حذف حسابدار\n\nلطفاً آیدی عددی حسابدار را ارسال کنید:",
             reply_markup=get_admin_back_button()
         )
         context.user_data['adm_state'] = 'awaiting_remove_accountant_id'
 
-    # ---- مدیریت کاربران ----
     elif data == "adm_manage_users":
         await query.edit_message_text(
-            "👫 مدیریت کاربران\n\n"
-            "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+            "👫 مدیریت کاربران\n\nلطفاً یکی از گزینه‌ها را انتخاب کنید:",
             reply_markup=get_user_management_buttons()
         )
 
     elif data == "adm_user_search":
         await query.edit_message_text(
-            "🔍 جستجوی کاربر\n\n"
-            "لطفاً آیدی عددی کاربر را ارسال کنید:",
+            "🔍 جستجوی کاربر\n\nلطفاً آیدی عددی کاربر را ارسال کنید:",
             reply_markup=get_admin_back_button()
         )
         context.user_data['adm_state'] = 'awaiting_search_user_id'
 
     elif data == "adm_user_block":
         await query.edit_message_text(
-            "🚫 مسدود / رفع مسدود\n\n"
-            "لطفاً آیدی عددی کاربر را ارسال کنید:",
+            "🚫 مسدود / رفع مسدود\n\nلطفاً آیدی عددی کاربر را ارسال کنید:",
             reply_markup=get_admin_back_button()
         )
         context.user_data['adm_state'] = 'awaiting_block_user_id'
 
     elif data == "adm_user_gift":
-        if not is_owner(user_id) and not is_admin(user_id):
-            await query.answer("⛔ دسترسی ندارید.", show_alert=True)
-            return
         await query.edit_message_text(
-            "🎁 ارسال هدیه\n\n"
-            "لطفاً آیدی عددی کاربر را ارسال کنید:",
+            "🎁 ارسال هدیه\n\nلطفاً آیدی عددی کاربر را ارسال کنید:",
             reply_markup=get_admin_back_button()
         )
         context.user_data['adm_state'] = 'awaiting_gift_user_id'
 
-    # ---- پیام همگانی ----
     elif data == "adm_broadcast":
         await query.edit_message_text(
-            "📣 پیام همگانی\n\n"
-            "لطفاً متن پیام خود را ارسال کنید:",
+            "📣 پیام همگانی\n\nلطفاً متن پیام خود را ارسال کنید:",
             reply_markup=get_admin_back_button()
         )
         context.user_data['adm_state'] = 'awaiting_broadcast'
 
-    # ---- تنظیمات ----
     elif data == "adm_settings":
         await query.edit_message_text(
-            "⚙️ تنظیمات ربات\n\n"
-            "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+            "⚙️ تنظیمات ربات\n\nلطفاً یکی از گزینه‌ها را انتخاب کنید:",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("👥 جوین اجباری", callback_data="adm_set_force")],
                 [InlineKeyboardButton("📝 مدیریت متن‌ها", callback_data="adm_set_texts")],
@@ -341,14 +294,12 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             ])
         )
 
-    # ---- هدیه ----
     elif data == "adm_gift":
         if not is_admin(user_id):
             await query.answer("⛔ دسترسی ندارید.", show_alert=True)
             return
         await query.edit_message_text(
-            "🎁 هدیه\n\n"
-            "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+            "🎁 هدیه\n\nلطفاً یکی از گزینه‌ها را انتخاب کنید:",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🎁 اهدا پکیج به کاربر", callback_data="adm_gift_package")],
                 [InlineKeyboardButton("⏰ اهدا مدت زمان به کاربر", callback_data="adm_gift_time")],
@@ -357,14 +308,12 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             ])
         )
 
-    # ---- روشن/خاموش ----
     elif data == "adm_toggle":
         if not is_owner(user_id):
             await query.answer("⛔ فقط مالک.", show_alert=True)
             return
         await query.edit_message_text(
-            "🚫 روشن/خاموش کردن ربات\n\n"
-            "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+            "🚫 روشن/خاموش کردن ربات\n\nلطفاً یکی از گزینه‌ها را انتخاب کنید:",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🟢 روشن کردن ربات", callback_data="adm_toggle_on")],
                 [InlineKeyboardButton("🔴 خاموش کردن ربات", callback_data="adm_toggle_off")],
@@ -372,14 +321,9 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             ])
         )
 
-    # ---- سایر دکمه‌های تنظیمات (فقط نمایش) ----
     elif data.startswith("adm_set_") or data.startswith("adm_gift_"):
         await query.answer("🚧 این بخش در حال ساخت است.", show_alert=True)
 
-
-# ============================================
-# دریافت ورودی‌های پنل مدیریت
-# ============================================
 
 async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = context.user_data.get('adm_state')
@@ -392,7 +336,6 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     text = update.message.text
 
-    # ---- افزودن دبیر ----
     if state == 'awaiting_teacher_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -402,7 +345,6 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ دبیر {tid} اضافه شد.")
         context.user_data.pop('adm_state', None)
 
-    # ---- حذف دبیر ----
     elif state == 'awaiting_remove_teacher_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -412,7 +354,6 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ دبیر {tid} حذف شد.")
         context.user_data.pop('adm_state', None)
 
-    # ---- افزودن ادمین ----
     elif state == 'awaiting_admin_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -422,7 +363,6 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ ادمین {aid} اضافه شد.")
         context.user_data.pop('adm_state', None)
 
-    # ---- حذف ادمین ----
     elif state == 'awaiting_remove_admin_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -432,7 +372,6 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ ادمین {aid} حذف شد.")
         context.user_data.pop('adm_state', None)
 
-    # ---- افزودن پشتیبان ----
     elif state == 'awaiting_support_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -442,7 +381,6 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ پشتیبان {sid} اضافه شد.")
         context.user_data.pop('adm_state', None)
 
-    # ---- حذف پشتیبان ----
     elif state == 'awaiting_remove_support_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -452,7 +390,6 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ پشتیبان {sid} حذف شد.")
         context.user_data.pop('adm_state', None)
 
-    # ---- افزودن حسابدار ----
     elif state == 'awaiting_accountant_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -462,7 +399,6 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ حسابدار {aid} اضافه شد.")
         context.user_data.pop('adm_state', None)
 
-    # ---- حذف حسابدار ----
     elif state == 'awaiting_remove_accountant_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -472,7 +408,6 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ حسابدار {aid} حذف شد.")
         context.user_data.pop('adm_state', None)
 
-    # ---- جستجوی کاربر ----
     elif state == 'awaiting_search_user_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -487,16 +422,15 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 f"نام: {user_data[2] or ''} {user_data[3] or ''}\n"
                 f"یوزرنیم: @{user_data[1] or 'ندارد'}\n"
                 f"شماره: {user_data[4] or 'ندارد'}\n"
-                f"کیف پول: {user_data[5]:,} تومان\n"
-                f"سوالات باقی: {user_data[6]}\n"
-                f"سوالات استفاده‌شده: {user_data[7]}\n"
-                f"پکیج فعال: {user_data[8]}\n"
-                f"زیرمجموعه: {user_data[10]}\n"
-                f"مسدود: {'✅ بله' if user_data[13] else '❌ خیر'}"
+                f"کیف پول: {user_data[6]:,} تومان\n"
+                f"سوالات باقی: {user_data[7]}\n"
+                f"سوالات استفاده‌شده: {user_data[8]}\n"
+                f"پکیج فعال: {user_data[9]}\n"
+                f"زیرمجموعه: {user_data[11]}\n"
+                f"مسدود: {'✅ بله' if user_data[15] else '❌ خیر'}"
             )
         context.user_data.pop('adm_state', None)
 
-    # ---- مسدود/رفع مسدود ----
     elif state == 'awaiting_block_user_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -506,22 +440,19 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if not user_data:
             await update.message.reply_text("⚠️ کاربر یافت نشد.")
         else:
-            new_status = 0 if user_data[13] else 1
+            new_status = 0 if user_data[15] else 1
             update_user(uid, is_blocked=new_status)
             status_text = "مسدود شد ✅" if new_status else "رفع مسدود شد ✅"
             await update.message.reply_text(f"✅ کاربر {uid} {status_text}")
         context.user_data.pop('adm_state', None)
 
-    # ---- ارسال هدیه ----
     elif state == 'awaiting_gift_user_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
             return True
         uid = int(text)
         context.user_data['gift_user_id'] = uid
-        await update.message.reply_text(
-            "🎁 لطفاً مبلغ هدیه (به تومان) را وارد کنید:"
-        )
+        await update.message.reply_text("🎁 لطفاً مبلغ هدیه (به تومان) را وارد کنید:")
         context.user_data['adm_state'] = 'awaiting_gift_amount'
 
     elif state == 'awaiting_gift_amount':
@@ -532,7 +463,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         uid = context.user_data.get('gift_user_id')
         user_data = get_user(uid)
         if user_data:
-            new_wallet = user_data[5] + amount
+            new_wallet = user_data[6] + amount
             update_user(uid, wallet=new_wallet)
             await update.message.reply_text(f"✅ {amount:,} تومان به کاربر {uid} هدیه داده شد.")
             try:
@@ -545,7 +476,6 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context.user_data.pop('adm_state', None)
         context.user_data.pop('gift_user_id', None)
 
-    # ---- پیام همگانی ----
     elif state == 'awaiting_broadcast':
         users = get_all_users()
         success = 0

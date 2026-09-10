@@ -1,15 +1,19 @@
+import random
+import requests
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from config import (
     CHANNEL_ID, BOT_LINK, DEFAULT_PACKAGES,
-    SUBJECTS, ABOUT_IMAGE_URL, ACCOUNTING_GROUP, SUPPORT_GROUP
+    SUBJECTS, ABOUT_IMAGE_URL, ACCOUNTING_GROUP, SUPPORT_GROUP,
+    SMSIR_API_KEY, SMSIR_TEMPLATE_ID, SMSIR_LINE_NUMBER
 )
 from database import (
     get_user, create_user, update_user, get_user_cards, get_verified_cards,
     add_card, delete_card, create_question, create_ticket, add_transaction,
-    reward_inviter, get_shamsi_now, get_shamsi_future_date
+    reward_inviter, get_shamsi_now, get_shamsi_future_date,
+    set_verification_code, get_verification_code
 )
 from keyboards import (
     get_force_buttons, get_main_menu_keyboard, get_lesson_keyboard,
@@ -26,6 +30,43 @@ from texts import (
     get_account_text
 )
 
+
+# ============================================
+# ارسال پیامک با SMS.ir
+# ============================================
+
+def send_verification_sms(phone_number, code):
+    """ارسال کد تأیید با SMS.ir"""
+    url = "https://api.sms.ir/v1/send/verify"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "text/plain",
+        "x-api-key": SMSIR_API_KEY,
+    }
+
+    payload = {
+        "mobile": phone_number,
+        "templateId": SMSIR_TEMPLATE_ID,
+        "parameters": [
+            {"name": "VERIFICATIONCODE", "value": str(code)},
+            {"name": "TIME", "value": "5"}
+        ]
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        result = response.json()
+        print(f"SMS.ir Response: {result}")
+        return result.get("status") == 1
+    except Exception as e:
+        print(f"SMS Error: {e}")
+        return False
+
+
+# ============================================
+# بررسی عضویت
+# ============================================
 
 async def is_user_member(application, user_id: int) -> bool:
     try:
@@ -46,16 +87,18 @@ def get_user_info(user_id):
         'first_name': user[2],
         'last_name': user[3],
         'phone': user[4],
-        'wallet': user[5],
-        'questions_remaining': user[6],
-        'questions_used': user[7],
-        'active_package': user[8],
-        'package_expire_date': user[9],
-        'referrals': user[10],
-        'invited_by': user[11],
-        'has_start_package': user[13],
-        'is_blocked': user[14],
-        'role': user[15],
+        'verification_code': user[5],
+        'wallet': user[6],
+        'questions_remaining': user[7],
+        'questions_used': user[8],
+        'active_package': user[9],
+        'package_expire_date': user[10],
+        'referrals': user[11],
+        'invited_by': user[12],
+        'invited_by_rewarded': user[13],
+        'has_start_package': user[14],
+        'is_blocked': user[15],
+        'role': user[16],
     }
 
 
@@ -80,9 +123,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_new:
         create_user(user_id, user.username, user.first_name, user.last_name, invited_by)
 
-    # بررسی عضویت
     if await is_user_member(context.application, user_id):
-        # پاداش به دعوت‌کننده بعد از عضویت
         if is_new:
             inviter_id = reward_inviter(user_id)
             if inviter_id:
@@ -112,7 +153,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# بررسی عضویت
+# بررسی عضویت (دکمه)
 # ============================================
 
 async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -123,7 +164,6 @@ async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE)
     message = query.message
 
     if await is_user_member(context.application, user_id):
-        # پاداش به دعوت‌کننده
         inviter_id = reward_inviter(user_id)
         if inviter_id:
             try:
@@ -183,9 +223,10 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
                 ])
             )
         else:
+            has_start = user_info['has_start_package'] == 1
             await query.edit_message_text(
                 PACKAGES_TEXT,
-                reply_markup=get_packages_buttons(),
+                reply_markup=get_packages_buttons(has_start_package=has_start),
                 parse_mode="Markdown"
             )
 
@@ -435,11 +476,34 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
     contact = update.message.contact
     if contact:
         user_id = update.effective_user.id
-        update_user(user_id, phone=contact.phone_number)
-        await update.message.reply_text(
-            "✅ شماره شما با موفقیت ثبت شد.\n\n"
-            "📨 لطفاً کد تأیید ارسال‌شده را وارد کنید."
-        )
+        phone = contact.phone_number
+
+        if phone.startswith("+"):
+            phone = phone[1:]
+        if phone.startswith("98"):
+            phone = "0" + phone[2:]
+
+        update_user(user_id, phone=phone)
+
+        code = str(random.randint(10000, 99999))
+        set_verification_code(user_id, code)
+
+        print(f"📱 Sending SMS to {phone} with code {code}")
+
+        success = send_verification_sms(phone, code)
+
+        if success:
+            context.user_data['awaiting_verification_code'] = True
+            await update.message.reply_text(
+                "✅ شماره شما ثبت شد.\n\n"
+                "📨 کد تأیید به شماره شما ارسال شد.\n"
+                "لطفاً کد ۵ رقمی را وارد کنید."
+            )
+        else:
+            await update.message.reply_text(
+                "❌ خطا در ارسال پیامک.\n"
+                "لطفاً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید."
+            )
 
 
 # ============================================
@@ -452,8 +516,20 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get('awaiting_card_photo'):
         context.user_data['card_photo'] = update.message.photo[-1].file_id
         context.user_data['awaiting_card_photo'] = False
-        context.user_data['awaiting_card_number'] = True
-        await update.message.reply_text(CARD_NUMBER_REQUEST)
+        context.user_data['awaiting_phone'] = True
+
+        keyboard = [[InlineKeyboardButton("📱 ارسال شماره", callback_data="request_phone")]]
+        from telegram import ReplyKeyboardMarkup, KeyboardButton
+        reply_kb = ReplyKeyboardMarkup(
+            [[KeyboardButton("📱 ارسال شماره من", request_contact=True)]],
+            resize_keyboard=True,
+            one_time_keyboard=True
+        )
+        await update.message.reply_text(
+            "📱 لطفاً شماره تلفن خود را ارسال کنید.\n\n"
+            "❗ این شماره باید به نام صاحب کارت باشد.",
+            reply_markup=reply_kb
+        )
         return
 
     if context.user_data.get('awaiting_question'):
@@ -486,7 +562,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_info = get_user_info(user_id)
 
-    # به‌روزرسانی اطلاعات کاربر
     update_user(
         user_id,
         username=user.username,
@@ -494,7 +569,29 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         last_name=user.last_name
     )
 
-    # حالت انتظار شماره کارت
+    # ---- حالت انتظار کد تأیید ----
+    if context.user_data.get('awaiting_verification_code'):
+        entered_code = text.strip()
+        stored_code = get_verification_code(user_id)
+
+        if stored_code and entered_code == stored_code:
+            context.user_data['awaiting_verification_code'] = False
+
+            # حالا شماره کارت را بگیر
+            context.user_data['awaiting_card_number'] = True
+
+            await update.message.reply_text(
+                "✅ کد تأیید صحیح است!\n\n"
+                "✍️ لطفاً شماره کارت ۱۶ رقمی خود را وارد کنید."
+            )
+        else:
+            await update.message.reply_text(
+                "❌ کد وارد شده اشتباه است.\n"
+                "لطفاً دوباره تلاش کنید."
+            )
+        return
+
+    # ---- حالت انتظار شماره کارت ----
     if context.user_data.get('awaiting_card_number'):
         if text and text.isdigit() and len(text) == 16:
             card_photo = context.user_data.get('card_photo')
@@ -512,6 +609,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"📌 احراز کارت جدید\n\n"
                         f"👤 کاربر: @{user.username or 'ندارد'}\n"
                         f"🆔 آیدی: {user_id}\n"
+                        f"📱 شماره: {user_info.get('phone', 'نامشخص')}\n"
                         f"💳 شماره کارت: {text}\n"
                         f"👤 نام: {user.first_name or ''} {user.last_name or ''}"
                     ),
@@ -528,7 +626,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ شماره کارت باید ۱۶ رقم عددی باشد.")
         return
 
-    # حالت انتظار تعداد سوال
+    # ---- حالت انتظار تعداد سوال ----
     if context.user_data.get('awaiting_question_count'):
         if text and text.isdigit():
             count = int(text)
@@ -564,7 +662,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ لطفاً یک عدد معتبر وارد کنید.")
         return
 
-    # منوی اصلی
+    # ---- منوی اصلی ----
     if text == "👤 حساب من":
         now = get_shamsi_now()
         await update.message.reply_text(

@@ -38,6 +38,11 @@ INVITE_REWARD = 4000
 # هدیه دعوت (سوال)
 INVITE_REWARD_QUESTIONS = 3
 
+# ---------- تنظیمات SMS.ir ----------
+SMSIR_API_KEY = "B33h8avj7PGBquAGfOXPLOw7LKYnmJNBXIN9XuxJLrfK0ojd"
+SMSIR_TEMPLATE_ID = 851846
+SMSIR_LINE_NUMBER = "30004505000017"  # ← از پنل SMS.ir خود جایگزین کنید
+
 # درگاه پرداخت
 ZARINPAL_MERCHANT = None
 

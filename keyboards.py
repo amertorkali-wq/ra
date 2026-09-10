@@ -69,11 +69,17 @@ def get_about_buttons():
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_packages_buttons():
+def get_packages_buttons(has_start_package=False):
     keyboard = []
     for pkg in DEFAULT_PACKAGES:
+        if pkg['is_start'] and has_start_package:
+            continue
+
         if pkg['is_start']:
-            keyboard.append([InlineKeyboardButton(f"🎁 {pkg['name']}", callback_data=f"buy_pkg_{pkg['id']}")])
+            keyboard.append([InlineKeyboardButton(
+                f"🎁 {pkg['name']}",
+                callback_data=f"buy_pkg_{pkg['id']}"
+            )])
         else:
             keyboard.append([InlineKeyboardButton(
                 f"🟡 {pkg['name']} | {pkg['price']:,} تومان | {pkg['questions']} سوال",

@@ -1,14 +1,9 @@
-from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from database import get_ticket, reply_ticket, is_staff
 from texts import SUPPORT_ANSWER_REQUEST, SUPPORT_BUSY
 
-
-# ============================================
-# بررسی پشتیبان بودن
-# ============================================
 
 def is_support(user_id):
     return (
@@ -17,10 +12,6 @@ def is_support(user_id):
         is_staff(user_id, role="owner")
     )
 
-
-# ============================================
-# دکمه "پاسخ دادن" توسط پشتیبان
-# ============================================
 
 async def support_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -37,7 +28,6 @@ async def support_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("⚠️ تیکت یافت نشد.", show_alert=True)
         return
 
-    # بررسی اینکه پشتیبان تیکت دیگری در دست ندارد
     active_id = context.user_data.get('active_ticket_id')
     if active_id and active_id != ticket_id:
         await query.answer(SUPPORT_BUSY, show_alert=True)
@@ -61,10 +51,6 @@ async def support_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# ============================================
-# دریافت پاسخ پشتیبان و ارسال به کاربر
-# ============================================
-
 async def support_send_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     ticket_id = context.user_data.get('active_ticket_id')
@@ -79,10 +65,8 @@ async def support_send_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
     student_id = ticket[1]
     text = update.message.text
 
-    # ذخیره پاسخ
     reply_ticket(ticket_id, text)
 
-    # ارسال به کاربر
     try:
         await context.bot.send_message(
             chat_id=student_id,
@@ -101,10 +85,6 @@ async def support_send_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
 
 
-# ============================================
-# بستن تیکت توسط پشتیبان
-# ============================================
-
 async def support_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
 
@@ -122,7 +102,6 @@ async def support_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.answer("✅ تیکت بسته شد.")
 
-    # پاک کردن active_ticket_id
     if context.user_data.get('active_ticket_id') == ticket_id:
         context.user_data.pop('active_ticket_id', None)
 
