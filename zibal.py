@@ -28,20 +28,36 @@ ZIBAL_RESULT_CODES = {
 
 
 def generate_order_id(user_id):
+    """ساخت orderId یکتا"""
     return f"VIOLEX-{user_id}-{int(time.time())}"
 
 
 def create_payment(amount, description, callback_url=None, mobile=None, order_id=None):
+    """
+    ایجاد تراکنش در زیبال
+    
+    Args:
+        amount: مبلغ به تومان
+        description: توضیحات
+        callback_url: آدرس بازگشت (باید HTTPS معتبر باشد)
+        mobile: شماره موبایل
+        order_id: شناسه سفارش یکتا
+    """
     if not ZIBAL_MERCHANT:
         return {"success": False, "error": "مرچنت تنظیم نشده", "code": -1}
 
-    amount_rial = amount * 10
+    amount_rial = amount * 10  # تبدیل تومان به ریال
+
+    # ⚠️ Callback URL باید HTTPS معتبر باشد
+    # از دامنه violexq.ir استفاده می‌کنیم
+    if not callback_url:
+        callback_url = "https://violexq.ir/payment/callback"
 
     payload = {
         "merchant": ZIBAL_MERCHANT,
         "amount": amount_rial,
         "description": description,
-        "callbackUrl": callback_url or "https://t.me/VIOLEXQ_bot",
+        "callbackUrl": callback_url,
     }
 
     if mobile:
@@ -80,6 +96,7 @@ def create_payment(amount, description, callback_url=None, mobile=None, order_id
 
 
 def verify_payment(track_id, amount):
+    """تأیید تراکنش"""
     if not ZIBAL_MERCHANT:
         return {"success": False, "error": "مرچنت تنظیم نشده"}
 
@@ -106,6 +123,7 @@ def verify_payment(track_id, amount):
                 "success": True,
                 "ref_id": result.get("refNumber", "-"),
                 "card_pan": result.get("cardNumber", "-"),
+                "amount": result.get("amount", amount_rial),
             }
         elif result.get("result") == 201:
             return {
@@ -124,6 +142,7 @@ def verify_payment(track_id, amount):
 
 
 def inquiry_payment(track_id):
+    """استعلام تراکنش"""
     if not ZIBAL_MERCHANT:
         return {"success": False, "error": "مرچنت تنظیم نشده"}
 
