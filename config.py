@@ -9,12 +9,11 @@ TOKEN = "8762301184:AAGbn9CZirNf7Yc9nRdnBpQMfFGEnu8r9wA"
 CHANNEL_ID = -1003858232624
 CHANNEL_LINK = "https://t.me/violex_official"
 
-# ---------- لینک ربات برای دعوت ----------
-BOT_LINK = "https://ble.ir/VIOLEXQ_BOT?start="
+# ---------- لینک ربات برای دعوت (تلگرام) ----------
+BOT_LINK = "https://t.me/VIOLEXQ_bot?start="
 
 # ---------- لینک عکس درباره ما ----------
 # اگر می‌خواهید عکس داشته باشید، لینک واقعی عکس را اینجا بگذارید
-# اگر نمی‌خواهید، مقدار None را نگه دارید
 ABOUT_IMAGE_URL = None
 
 # ---------- آیدی مالک اصلی ----------
@@ -39,7 +38,7 @@ ACCOUNTING_GROUP = -1003780590510
 INVITE_REWARD = 4000
 
 # ---------- درگاه پرداخت ----------
-ZARINPAL_MERCHANT = None  # فعلاً ندارد
+ZARINPAL_MERCHANT = None
 
 # ---------- پکیج‌ها ----------
 DEFAULT_PACKAGES = [

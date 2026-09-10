@@ -9,7 +9,7 @@ from database import (
 from keyboards import (
     get_teacher_close_button, get_student_answer_buttons
 )
-from texts import TEACHER_ANSWER_REQUEST, TEACHER_BUSY
+from texts import TEACHER_ANSWER_REQUEST, TEACHER_BUSY, ABOUT_US_TEXT
 
 
 # ============================================
@@ -18,6 +18,71 @@ from texts import TEACHER_ANSWER_REQUEST, TEACHER_BUSY
 
 def is_teacher(user_id):
     return is_staff(user_id, role="teacher") or is_staff(user_id, role="owner") or is_staff(user_id, role="admin")
+
+
+# ============================================
+# اطلاعات دبیران (بیوگرافی)
+# ============================================
+
+TEACHER_BIOS = {
+    "زیست": (
+        "👤 *نام دبیر:* امیرپارسا زارعی\n"
+        "🎓 *رشته تحصیلی:* پزشکی\n"
+        "🏛️ *دانشگاه محل تحصیل:* دانشگاه علوم پزشکی شهید بهشتی\n"
+        "📣 *فعالیت تخصصی دبیر:*\n"
+        "🧬 *دبیر زیست* | 📌 *طراحی و ویراستاری آزمون*\n\n"
+        "📌 *رزومه فردی:*\n"
+        "✅ رتبه ۱۹۱ منطقه ۲ و ۴۰۰ کشور\n"
+        "✅ بالاترین درصد زیست کنکور ۱۴۰۴\n"
+        "✅ کسب درصد *۹۴٪* در کنکور اردیبهشت و *۹۷٪* در کنکور تیرماه\n\n"
+        "💼 *رزومه شغلی و اجرایی:*\n"
+        "🔸 ویراستار آزمون «زیستاز»\n"
+        "🔸 طراح آزمون «آرمان»"
+    ),
+    "شیمی": (
+        "👤 *نام دبیر:* امیررضا کیانی آسیابری\n"
+        "🎓 *رشته تحصیلی:* پزشکی\n"
+        "🏛️ *دانشگاه محل تحصیل:* دانشگاه علوم پزشکی گیلان\n"
+        "📣 *فعالیت تخصصی دبیر:*\n"
+        "🧪 *دبیر شیمی* | 📌 *مشاوره و برنامه‌ریزی تحصیلی*\n\n"
+        "📌 *رزومه فردی:*\n"
+        "✅ تنها معدل ۲۰ کل کشور\n"
+        "✅ مدال مسابقات *IMC* (مسابقات جهانی ریاضی)\n"
+        "✅ قبولی المپیادهای *شیمی، کامپیوتر و نجوم*\n\n"
+        "💼 *رزومه شغلی و اجرایی:*\n"
+        "🔸 عضو دپارتمان شیمی «سیب ترش»\n"
+        "🔸 طراح سوالات آزمون‌های آزمایشی\n"
+        "🔸 برگزارکننده همایش‌های مشاوره‌ای"
+    ),
+    "فیزیک": (
+        "👤 *نام دبیر:* احمدرضا اسکندری\n"
+        "🎓 *رشته تحصیلی:* پزشکی\n"
+        "🏛️ *دانشگاه محل تحصیل:* دانشگاه علوم پزشکی گیلان\n"
+        "📣 *فعالیت تخصصی دبیر:*\n"
+        "⚡️ *دبیر فیزیک* | 👨‍🏫 *تدریس خصوصی* | 📌 *ویراستاری آزمون*\n\n"
+        "💼 *رزومه شغلی و اجرایی:*\n"
+        "🔸 برگزاری کلاس تدریس خصوصی\n"
+        "🔸 سابقه همکاری با مدارس برتر رشت\n"
+        "🔸 ویراستار آزمون‌های آزمایشی"
+    ),
+    "ریاضی": (
+        "👤 *نام دبیر:* محمدرضا سروری\n"
+        "🎓 *رشته تحصیلی:* مهندسی شیمی\n"
+        "🏛️ *دانشگاه محل تحصیل:* دانشگاه صنعتی امیرکبیر\n"
+        "📣 *فعالیت تخصصی دبیر:*\n"
+        "⚡️ *دبیر فیزیک* | 📐 *دبیر ریاضی* | ✍️ *طراحی سوال* | 🎯 *جمع‌بندی و آمادگی آزمون*\n\n"
+        "📌 *رزومه فردی:*\n"
+        "✅ رتبه ۱۲۴۶\n"
+        "✅ ریاضیات *۵۴٪* و فیزیک *۹۲٪*\n"
+        "✅ مدال طلای المپیاد جهانی ریاضیات و علوم *ISMI*\n"
+        "✅ رتبه ممتاز ورودی مهندسی شیمی دانشگاه صنعتی امیرکبیر\n"
+        "✅ *رتبه ۵* آموزش ریاضی کنکور فرهنگیان\n\n"
+        "💼 *رزومه شغلی و اجرایی:*\n"
+        "🔸 طراح سوال\n"
+        "🔸 برگزارکننده کلاس‌های جمع‌بندی برای مدارس برتر تهران\n"
+        "🔸 برگزاری کلاس خصوصی"
+    ),
+}
 
 
 # ============================================
@@ -31,12 +96,10 @@ async def teacher_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     question_id = int(data.split("_")[2])
 
-    # بررسی دبیر بودن
     if not is_teacher(user_id):
         await query.answer("⛔ شما دبیر نیستید.", show_alert=True)
         return
 
-    # بررسی اینکه دبیر سوال دیگری در دست ندارد
     active_id = context.user_data.get('active_question_id')
     if active_id and active_id != question_id:
         await query.answer(TEACHER_BUSY, show_alert=True)
@@ -47,19 +110,16 @@ async def teacher_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("⚠️ سؤال یافت نشد.", show_alert=True)
         return
 
-    # بررسی وضعیت سؤال
     if question[7] not in ('waiting', 'taken'):
         await query.answer("⚠️ این سؤال قبلاً بسته شده است.", show_alert=True)
         return
 
-    # اگر قبلاً توسط دبیر دیگری برداشته شده
     if question[7] == 'taken' and question[8] != user_id:
         await query.answer("⚠️ این سؤال قبلاً توسط دبیر دیگری برداشته شده است.", show_alert=True)
         return
 
     await query.answer("✅ سؤال به شما تخصیص داده شد.")
 
-    # تخصیص سؤال به دبیر
     now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
     update_question(
         question_id,
@@ -70,7 +130,6 @@ async def teacher_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data['active_question_id'] = question_id
 
-    # ویرایش پیام اصلی (حذف دکمه پاسخ و گذاشتن فقط بستن)
     try:
         await query.edit_message_reply_markup(
             reply_markup=get_teacher_close_button(question_id)
@@ -78,14 +137,13 @@ async def teacher_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         pass
 
-    # پیام به دبیر
     await query.message.reply_text(
         TEACHER_ANSWER_REQUEST.format(code=question[3])
     )
 
 
 # ============================================
-# دریافت پاسخ دبیر و ارسال به دانش‌آموز
+# دریافت پاسخ دبیر
 # ============================================
 
 async def teacher_send_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -102,14 +160,12 @@ async def teacher_send_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not question:
         return
 
-    # اگر سؤال بسته شده
     if question[7] == 'closed':
         context.user_data.pop('active_question_id', None)
         return
 
     student_id = question[1]
 
-    # فوروارد پیام به دانش‌آموز
     try:
         await context.bot.copy_message(
             chat_id=student_id,
@@ -118,12 +174,6 @@ async def teacher_send_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
     except Exception as e:
         print(f"Error sending answer to student: {e}")
-        try:
-            await update.message.reply_text(
-                f"⚠️ خطا در ارسال به دانش‌آموز: {e}"
-            )
-        except:
-            pass
 
 
 # ============================================
@@ -145,7 +195,6 @@ async def teacher_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("⚠️ سؤال یافت نشد.", show_alert=True)
         return
 
-    # بررسی اینکه دبیر همین سؤال را داشته
     if question[8] != user_id and question[7] != 'waiting':
         await query.answer("⛔ شما دبیر این سؤال نیستید.", show_alert=True)
         return
@@ -155,22 +204,18 @@ async def teacher_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
     update_question(question_id, status='answered', closed_time=now)
 
-    # پاک کردن active_question_id
     if context.user_data.get('active_question_id') == question_id:
         context.user_data.pop('active_question_id', None)
 
-    # ویرایش پیام
     try:
         await query.edit_message_reply_markup(reply_markup=None)
     except:
         pass
 
-    # پیام به گروه
     await query.message.reply_text(
         f"✅ سؤال {question[3]} توسط دبیر بسته شد."
     )
 
-    # پیام به دانش‌آموز
     student_id = question[1]
     try:
         await context.bot.send_message(
@@ -187,7 +232,7 @@ async def teacher_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# دکمه "متوجه شدم" توسط دانش‌آموز
+# دکمه "متوجه شدم"
 # ============================================
 
 async def student_understood(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -208,14 +253,13 @@ async def student_understood(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 # ============================================
-# دکمه "سوال تکمیلی" توسط دانش‌آموز
+# دکمه "سوال تکمیلی"
 # ============================================
 
 async def student_followup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    user_id = query.from_user.id
     question_id = int(query.data.split("_")[3])
 
     context.user_data['followup_question_id'] = question_id
@@ -226,10 +270,6 @@ async def student_followup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "⚠️ سؤال تکمیلی فقط درباره همان سؤال قبلی است."
     )
 
-
-# ============================================
-# دریافت سوال تکمیلی (این تابع مهم است!)
-# ============================================
 
 async def handle_followup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.user_data.get('awaiting_followup'):
@@ -271,3 +311,58 @@ async def handle_followup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "پاسخ از طریق همین ربات به شما اطلاع داده خواهد شد."
     )
     return True
+
+
+# ============================================
+# نمایش اطلاعات دبیر (درباره ما - با ویرایش پیام)
+# ============================================
+
+async def show_teacher_bio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نمایش اطلاعات دبیر با ویرایش پیام"""
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+
+    subject_map = {
+        "about_biology": "زیست",
+        "about_chemistry": "شیمی",
+        "about_physics": "فیزیک",
+        "about_math": "ریاضی",
+    }
+
+    subject = subject_map.get(data)
+    if not subject:
+        return
+
+    bio_text = TEACHER_BIOS.get(subject, "اطلاعات موجود نیست.")
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="about_back")]
+    ])
+
+    try:
+        await query.edit_message_text(
+            bio_text,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        print(f"Error editing message: {e}")
+
+
+async def back_to_about(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """بازگشت به منوی درباره ما"""
+    query = update.callback_query
+    await query.answer()
+
+    from keyboards import get_about_buttons
+
+    try:
+        await query.edit_message_text(
+            ABOUT_US_TEXT,
+            reply_markup=get_about_buttons(),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        print(f"Error: {e}")

@@ -16,16 +16,14 @@ from handlers import accountant_panel, admin_panel
 # ============================================
 
 async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مسیریاب پیام‌های متنی"""
-
-    # 1) پنل مدیریت (اگر در حالت انتظار ورودی باشد)
+    # 1) پنل مدیریت
     try:
         if await admin_panel.handle_admin_input(update, context):
             return
     except Exception as e:
         print(f"Admin input error: {e}")
 
-    # 2) پنل حسابداری (دلیل رد کارت)
+    # 2) پنل حسابداری
     try:
         if await accountant_panel.handle_card_reject_reason(update, context):
             return
@@ -39,21 +37,21 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print(f"Teacher followup error: {e}")
 
-    # 4) پنل پشتیبانی (اگر در حالت پاسخ باشد)
+    # 4) پنل پشتیبانی
     if context.user_data.get('active_ticket_id'):
         user_id = update.effective_user.id
         if support_panel.is_support(user_id):
             await support_panel.support_send_reply(update, context)
             return
 
-    # 5) پنل دبیران (اگر در حالت پاسخ باشد)
+    # 5) پنل دبیران (در حال پاسخ)
     if context.user_data.get('active_question_id'):
         user_id = update.effective_user.id
         if teacher_panel.is_teacher(user_id):
             await teacher_panel.teacher_send_answer(update, context)
             return
 
-    # 6) پنل عمومی کاربر
+    # 6) پنل عمومی
     await user_panel.handle_message(update, context)
 
 
@@ -62,16 +60,12 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================================
 
 async def photo_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مسیریاب پیام‌های عکس"""
-
-    # 1) پنل دبیران (اگر در حالت پاسخ باشد)
     if context.user_data.get('active_question_id'):
         user_id = update.effective_user.id
         if teacher_panel.is_teacher(user_id):
             await teacher_panel.teacher_send_answer(update, context)
             return
 
-    # 2) پنل عمومی
     await user_panel.handle_photo(update, context)
 
 
@@ -139,40 +133,12 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ---- دکمه‌های درباره ما ----
     if data in ("about_biology", "about_chemistry", "about_physics", "about_math"):
-        # پاسخ به کاربر با اطلاعات دبیر
-        teacher_info = {
-            "about_biology": "🧬 دبیر زیست\n\nنام دبیر: دکتر محمدی\nسابقه تدریس: ۱۲ سال\nمدرس کنکور و آزمون‌های آزمایشی\n\nویژگی تدریس:\n• توضیح مفهومی\n• تحلیل کامل تست\n• بررسی گزینه‌ها\n\n📚 تخصص: زیست کنکور",
-            "about_chemistry": "🧪 دبیر شیمی\n\nنام دبیر: استاد رضایی\nسابقه تدریس: ۱۰ سال\nمدرس کنکور و آزمون‌های آزمایشی\n\nویژگی تدریس:\n• توضیح مفهومی\n• تحلیل کامل تست\n• بررسی گزینه‌ها\n\n📚 تخصص: شیمی کنکور",
-            "about_physics": "⚡️ دبیر فیزیک\n\nنام دبیر: استاد احمدی\nسابقه تدریس: ۱۵ سال\nمدرس کنکور و آزمون‌های آزمایشی\n\nویژگی تدریس:\n• توضیح مفهومی\n• تحلیل کامل تست\n• بررسی گزینه‌ها\n\n📚 تخصص: فیزیک کنکور",
-            "about_math": "📐 دبیر ریاضی\n\nنام دبیر: استاد کریمی\nسابقه تدریس: ۱۴ سال\nمدرس کنکور و آزمون‌های آزمایشی\n\nویژگی تدریس:\n• توضیح مفهومی\n• تحلیل کامل تست\n• بررسی گزینه‌ها\n\n📚 تخصص: ریاضی کنکور",
-        }
-        await query.answer()
-        await query.message.reply_text(
-            teacher_info.get(data, "اطلاعات موجود نیست."),
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 برگشت", callback_data="about_back")]
-            ])
-        )
+        await teacher_panel.show_teacher_bio(update, context)
         return
 
     # ---- بازگشت از درباره ما ----
     if data == "about_back":
-        await query.answer()
-        try:
-            await query.message.delete()
-        except:
-            pass
-        await query.message.reply_text(
-            "📚 *درباره ما*\n\n"
-            "برای مشاهده اطلاعات دبیران، یکی از درس‌ها را انتخاب کنید:",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🧬 زیست", callback_data="about_biology")],
-                [InlineKeyboardButton("🧪 شیمی", callback_data="about_chemistry")],
-                [InlineKeyboardButton("⚡️ فیزیک", callback_data="about_physics")],
-                [InlineKeyboardButton("📐 ریاضی", callback_data="about_math")],
-            ]),
-            parse_mode="Markdown"
-        )
+        await teacher_panel.back_to_about(update, context)
         return
 
     # ---- دکمه‌های احراز هویت ----
@@ -207,26 +173,16 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================================
 
 def main():
-    # راه‌اندازی دیتابیس
     init_db()
 
-    # ساخت اپلیکیشن
     app = Application.builder().token(TOKEN).build()
 
-    # ---- هندلرهای دستورات ----
     app.add_handler(CommandHandler("start", user_panel.start))
     app.add_handler(CommandHandler("admin", admin_command))
 
-    # ---- هندلر دکمه‌های شیشه‌ای ----
     app.add_handler(CallbackQueryHandler(callback_router))
-
-    # ---- هندلر مخاطبین ----
     app.add_handler(MessageHandler(filters.CONTACT, contact_router))
-
-    # ---- هندلر عکس‌ها ----
     app.add_handler(MessageHandler(filters.PHOTO, photo_router))
-
-    # ---- هندلر پیام‌های متنی ----
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_router))
 
     print("✅ ربات VIOLEX با موفقیت راه‌اندازی شد!")
