@@ -2,18 +2,26 @@ from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-from config import SUBJECTS
+from config import SUBJECTS, TEACHER_TIMEOUT_MINUTES
 from database import (
-    get_question, update_question, is_staff, get_user, get_shamsi_now
+    get_question, update_question, is_staff, get_user, get_shamsi_now,
+    get_teacher_active_question, get_expired_questions
 )
 from keyboards import (
     get_teacher_close_button, get_student_answer_buttons
 )
-from texts import TEACHER_ANSWER_REQUEST, TEACHER_BUSY, ABOUT_US_TEXT
+from texts import (
+    TEACHER_ANSWER_REQUEST, TEACHER_BUSY, TEACHER_TAKEN_MSG,
+    TEACHER_TIMEOUT_MSG, QUESTION_TAKEN_BY_OTHER, ABOUT_US_TEXT
+)
 
 
 def is_teacher(user_id):
-    return is_staff(user_id, role="teacher") or is_staff(user_id, role="owner") or is_staff(user_id, role="admin")
+    return (
+        is_staff(user_id, role="teacher") or
+        is_staff(user_id, role="owner") or
+        is_staff(user_id, role="admin")
+    )
 
 
 TEACHER_BIOS = {
@@ -77,10 +85,16 @@ TEACHER_BIOS = {
 }
 
 
+# ============================================
+# دکمه "پاسخ دادن" توسط دبیر
+# ============================================
+
 async def teacher_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
 
     user_id = query.from_user.id
+    username = query.from_user.username or query.from_user.first_name or "دبیر"
+    full_name = f"{query.from_user.first_name or ''} {query.from_user.last_name or ''}".strip()
     data = query.data
     question_id = int(data.split("_")[2])
 
@@ -88,8 +102,9 @@ async def teacher_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("⛔ شما دبیر نیستید.", show_alert=True)
         return
 
-    active_id = context.user_data.get('active_question_id')
-    if active_id and active_id != question_id:
+    # بررسی اینکه دبیر سوال دیگری در دست ندارد
+    active = get_teacher_active_question(user_id)
+    if active and active[0] != question_id:
         await query.answer(TEACHER_BUSY, show_alert=True)
         return
 
@@ -102,22 +117,36 @@ async def teacher_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("⚠️ این سؤال قبلاً بسته شده است.", show_alert=True)
         return
 
+    # اگر قبلاً توسط دبیر دیگری برداشته شده
     if question[7] == 'taken' and question[8] != user_id:
-        await query.answer("⚠️ این سؤال قبلاً توسط دبیر دیگری برداشته شده است.", show_alert=True)
+        teacher_name = question[10] or f"@{question[9]}" if question[9] else "دبیر دیگر"
+        await query.answer(
+            QUESTION_TAKEN_BY_OTHER.format(teacher_name=teacher_name),
+            show_alert=True
+        )
         return
 
     await query.answer("✅ سؤال به شما تخصیص داده شد.")
 
+    # زمان تایم اوت
+    from datetime import timedelta
+    import jdatetime
     now = get_shamsi_now()
+    timeout = (jdatetime.datetime.now() + jdatetime.timedelta(minutes=TEACHER_TIMEOUT_MINUTES)).strftime("%Y/%m/%d %H:%M:%S")
+
     update_question(
         question_id,
         status='taken',
         teacher_id=user_id,
-        taken_time=now
+        teacher_username=username,
+        teacher_name=full_name or username,
+        taken_time=now,
+        timeout_time=timeout
     )
 
     context.user_data['active_question_id'] = question_id
 
+    # ویرایش پیام اصلی
     try:
         await query.edit_message_reply_markup(
             reply_markup=get_teacher_close_button(question_id)
@@ -125,10 +154,25 @@ async def teacher_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         pass
 
+    # پیام به دبیر
     await query.message.reply_text(
-        TEACHER_ANSWER_REQUEST.format(code=question[3])
+        TEACHER_ANSWER_REQUEST.format(
+            code=question[3],
+            username=username,
+            timeout=TEACHER_TIMEOUT_MINUTES
+        ),
+        parse_mode="Markdown"
     )
 
+    await query.message.reply_text(
+        TEACHER_TAKEN_MSG.format(code=question[3]),
+        parse_mode="Markdown"
+    )
+
+
+# ============================================
+# دریافت پاسخ دبیر و ارسال به دانش‌آموز
+# ============================================
 
 async def teacher_send_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -142,6 +186,10 @@ async def teacher_send_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     question = get_question(question_id)
     if not question:
+        return
+
+    # بررسی اینکه دبیر همان دبیر باشد
+    if question[8] != user_id:
         return
 
     if question[7] == 'closed':
@@ -160,6 +208,10 @@ async def teacher_send_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         print(f"Error sending answer to student: {e}")
 
 
+# ============================================
+# بستن سؤال توسط دبیر
+# ============================================
+
 async def teacher_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
 
@@ -175,14 +227,15 @@ async def teacher_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("⚠️ سؤال یافت نشد.", show_alert=True)
         return
 
-    if question[8] != user_id and question[7] != 'waiting':
+    # بررسی اینکه دبیر همین سؤال را داشته
+    if question[8] != user_id and question[7] not in ('waiting', 'taken'):
         await query.answer("⛔ شما دبیر این سؤال نیستید.", show_alert=True)
         return
 
     await query.answer("✅ سؤال بسته شد.")
 
     now = get_shamsi_now()
-    update_question(question_id, status='answered', closed_time=now)
+    update_question(question_id, status='answered', answered_time=now, closed_time=now)
 
     if context.user_data.get('active_question_id') == question_id:
         context.user_data.pop('active_question_id', None)
@@ -193,28 +246,35 @@ async def teacher_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 
     await query.message.reply_text(
-        f"✅ سؤال {question[3]} توسط دبیر بسته شد."
+        f"✅ سؤال `{question[3]}` بسته شد.",
+        parse_mode="Markdown"
     )
 
+    # پیام به دانش‌آموز
     student_id = question[1]
     student = get_user(student_id)
-    questions_left = student[7] if student else 0
+    questions_left = student[8] if student else 0
 
     try:
         await context.bot.send_message(
             chat_id=student_id,
             text=(
-                f"✅ پاسخ سؤال شما ارسال شد.\n\n"
+                f"✅ *پاسخ سؤال شما ارسال شد.*\n\n"
                 f"📚 درس: {question[2]}\n"
-                f"🆔 کد سؤال: {question[3]}\n\n"
+                f"🆔 کد سؤال: `{question[3]}`\n\n"
                 f"📚 سوالات باقی‌مانده شما: {questions_left}\n\n"
                 f"آیا متوجه شدید؟"
             ),
-            reply_markup=get_student_answer_buttons(question_id)
+            reply_markup=get_student_answer_buttons(question_id),
+            parse_mode="Markdown"
         )
     except Exception as e:
         print(f"Error sending to student: {e}")
 
+
+# ============================================
+# پاسخ دانش‌آموز
+# ============================================
 
 async def student_understood(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -226,8 +286,9 @@ async def student_understood(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     try:
         await query.edit_message_text(
-            "✅ از اینکه از ویولکس استفاده کردید سپاسگزاریم.\n\n"
-            "موفق باشید! 🌟"
+            "✅ *از اینکه از ویولکس استفاده کردید سپاسگزاریم.*\n\n"
+            "موفق باشید! 🌟",
+            parse_mode="Markdown"
         )
     except:
         pass
@@ -243,8 +304,9 @@ async def student_followup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['awaiting_followup'] = True
 
     await query.message.reply_text(
-        "🔁 لطفاً سؤال تکمیلی خود را ارسال کنید.\n\n"
-        "⚠️ سؤال تکمیلی فقط درباره همان سؤال قبلی است."
+        "🔁 *لطفاً سؤال تکمیلی خود را ارسال کنید.*\n\n"
+        "⚠️ سؤال تکمیلی فقط درباره همان سؤال قبلی است.",
+        parse_mode="Markdown"
     )
 
 
@@ -271,24 +333,30 @@ async def handle_followup(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(
                 chat_id=subject_info['group'],
                 text=(
-                    f"🔁 سؤال تکمیلی برای کد: {question[3]}\n\n"
+                    f"🔁 *سؤال تکمیلی برای کد:* `{question[3]}`\n\n"
                     f"👤 دانش‌آموز: @{user.username or 'ندارد'}\n"
                     f"📌 این سؤال باید توسط دبیر پاسخ داده شود.\n\n"
-                    f"📝 متن سؤال تکمیلی:\n{text}"
+                    f"📝 *متن سؤال تکمیلی:*\n{text}"
                 ),
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("پاسخ دادن ✅", callback_data=f"t_answer_{question_id}")]
-                ])
+                    [InlineKeyboardButton("✅ پاسخ دادن", callback_data=f"t_answer_{question_id}")]
+                ]),
+                parse_mode="Markdown"
             )
         except Exception as e:
             print(f"Error sending followup: {e}")
 
     await update.message.reply_text(
-        "✅ سؤال تکمیلی شما ارسال شد.\n"
-        "پاسخ از طریق همین ربات به شما اطلاع داده خواهد شد."
+        "✅ *سؤال تکمیلی شما ارسال شد.*\n"
+        "پاسخ از طریق همین ربات به شما اطلاع داده خواهد شد.",
+        parse_mode="Markdown"
     )
     return True
 
+
+# ============================================
+# اطلاعات دبیران (درباره ما)
+# ============================================
 
 async def show_teacher_bio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -337,3 +405,68 @@ async def back_to_about(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except Exception as e:
         print(f"Error: {e}")
+
+
+# ============================================
+# بررسی تایم اوت دبیران (برای اجرا در JobQueue)
+# ============================================
+
+async def check_teacher_timeouts(context: ContextTypes.DEFAULT_TYPE):
+    """بررسی سوالاتی که تایم‌شان تمام شده"""
+    expired = get_expired_questions()
+
+    for question_id, code, teacher_id in expired:
+        # بازگشت به صف
+        update_question(
+            question_id,
+            status='waiting',
+            teacher_id=None,
+            teacher_username=None,
+            teacher_name=None,
+            taken_time=None,
+            timeout_time=None
+        )
+
+        question = get_question(question_id)
+        if not question:
+            continue
+
+        subject = question[2]
+        subject_info = SUBJECTS.get(subject)
+
+        if not subject_info:
+            continue
+
+        # پیام به گروه دبیران
+        try:
+            student = get_user(question[1])
+            username = student[1] if student else None
+
+            await context.bot.send_message(
+                chat_id=subject_info['group'],
+                text=(
+                    f"⏰ *سؤال بازگشت به صف*\n\n"
+                    f"📚 درس: {subject}\n"
+                    f"👤 دانش‌آموز: @{username or 'ندارد'}\n"
+                    f"🆔 کد سؤال: `{code}`\n"
+                    f"⚠️ دبیر قبلی در زمان مقرر پاسخ نداد.\n\n"
+                    f"📝 لطفاً یکی از دبیران پاسخ دهد."
+                ),
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("✅ پاسخ دادن", callback_data=f"t_answer_{question_id}")]
+                ]),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            print(f"Error sending timeout: {e}")
+
+        # پیام به دبیر قبلی
+        if teacher_id:
+            try:
+                await context.bot.send_message(
+                    chat_id=teacher_id,
+                    text=TEACHER_TIMEOUT_MSG.format(code=code),
+                    parse_mode="Markdown"
+                )
+            except:
+                pass

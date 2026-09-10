@@ -29,7 +29,7 @@ SUPPORT_GROUP = -1003780590510
 # کانال گزارش تراکنش‌ها
 TRANSACTION_CHANNEL = -1004348903892
 
-# گروه حسابداری
+# گروه حسابداری (احراز هویت فقط اینجا)
 ACCOUNTING_GROUP = -1003780590510
 
 # هدیه دعوت
@@ -44,6 +44,10 @@ SMSIR_LINE_NUMBER = "30004505000017"
 # ---------- تنظیمات زرین‌پال ----------
 ZARINPAL_MERCHANT = "69e3945ee6d570ad00fd0dad"
 ZARINPAL_SANDBOX = False
+
+# ---------- تایم لیمیت‌ها (دقیقه) ----------
+TEACHER_TIMEOUT_MINUTES = 180  # 3 ساعت
+SUPPORT_TIMEOUT_HOURS = 24     # 24 ساعت
 
 # پکیج‌ها
 DEFAULT_PACKAGES = [

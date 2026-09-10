@@ -9,7 +9,7 @@ def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
-    # کاربران
+    # ---------- کاربران ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -17,8 +17,8 @@ def init_db():
             first_name TEXT,
             last_name TEXT,
             phone TEXT,
-            verification_code TEXT,
             phone_verified INTEGER DEFAULT 0,
+            verification_code TEXT,
             wallet INTEGER DEFAULT 0,
             questions_remaining INTEGER DEFAULT 0,
             questions_used INTEGER DEFAULT 0,
@@ -34,7 +34,7 @@ def init_db():
         )
     ''')
 
-    # کارت‌ها
+    # ---------- کارت‌های بانکی ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS cards (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,12 +43,13 @@ def init_db():
             card_holder TEXT,
             photo_file_id TEXT,
             verified INTEGER DEFAULT 0,
+            is_primary INTEGER DEFAULT 0,
             rejected_reason TEXT,
             created_at TEXT
         )
     ''')
 
-    # سوالات
+    # ---------- سوالات ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS questions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,14 +62,29 @@ def init_db():
             status TEXT DEFAULT 'waiting',
             teacher_id INTEGER DEFAULT NULL,
             teacher_username TEXT DEFAULT NULL,
+            teacher_name TEXT DEFAULT NULL,
             taken_time TEXT,
+            timeout_time TEXT,
             answered_time TEXT,
             closed_time TEXT,
             created_at TEXT
         )
     ''')
 
-    # تراکنش‌ها
+    # ---------- پاسخ‌های دبیر ----------
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS question_replies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question_id INTEGER,
+            teacher_id INTEGER,
+            message_id INTEGER,
+            content TEXT,
+            file_id TEXT,
+            created_at TEXT
+        )
+    ''')
+
+    # ---------- تراکنش‌ها ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,7 +98,7 @@ def init_db():
         )
     ''')
 
-    # تیکت‌های پشتیبانی
+    # ---------- تیکت‌های پشتیبانی ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS tickets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,15 +108,31 @@ def init_db():
             status TEXT DEFAULT 'waiting',
             support_id INTEGER DEFAULT NULL,
             support_username TEXT DEFAULT NULL,
-            support_taken_time TEXT DEFAULT NULL,
+            support_name TEXT DEFAULT NULL,
+            support_taken_time TEXT,
+            timeout_time TEXT,
             reply TEXT,
-            replied_time TEXT DEFAULT NULL,
-            closed_time TEXT DEFAULT NULL,
+            replied_time TEXT,
+            closed_time TEXT,
             created_at TEXT
         )
     ''')
 
-    # کارکنان
+    # ---------- پیام‌های داخل تیکت ----------
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS ticket_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticket_id INTEGER,
+            sender_type TEXT,
+            sender_id INTEGER,
+            message_id INTEGER,
+            content TEXT,
+            file_id TEXT,
+            created_at TEXT
+        )
+    ''')
+
+    # ---------- کارکنان ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS staff (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,15 +145,7 @@ def init_db():
         )
     ''')
 
-    # تنظیمات
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-    ''')
-
-    # پرداخت‌های زرین‌پال
+    # ---------- پرداخت‌ها ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS payments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,11 +153,20 @@ def init_db():
             authority TEXT UNIQUE,
             amount INTEGER,
             description TEXT,
+            card_id INTEGER DEFAULT NULL,
             status TEXT DEFAULT 'pending',
             ref_id TEXT,
             card_pan TEXT,
             created_at TEXT,
             verified_at TEXT
+        )
+    ''')
+
+    # ---------- تنظیمات ----------
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
         )
     ''')
 
@@ -157,6 +190,23 @@ def get_shamsi_date():
 def get_shamsi_future_date(days):
     future = jdatetime.datetime.now() + jdatetime.timedelta(days=days)
     return future.strftime("%Y/%m/%d")
+
+
+def get_shamsi_datetime():
+    return jdatetime.datetime.now()
+
+
+def parse_shamsi(dt_str):
+    """تبدیل رشته شمسی به آبجکت datetime"""
+    if not dt_str:
+        return None
+    try:
+        return jdatetime.datetime.strptime(dt_str, "%Y/%m/%d %H:%M:%S")
+    except:
+        try:
+            return jdatetime.datetime.strptime(dt_str, "%Y/%m/%d")
+        except:
+            return None
 
 
 # ============================================
@@ -336,10 +386,16 @@ def add_card(user_id, card_number, card_holder, photo_file_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     now = get_shamsi_now()
+
+    # بررسی کارت پیش‌فرض
+    c.execute("SELECT COUNT(*) FROM cards WHERE user_id = ? AND verified = 1", (user_id,))
+    count = c.fetchone()[0]
+    is_primary = 1 if count == 0 else 0
+
     c.execute('''
-        INSERT INTO cards (user_id, card_number, card_holder, photo_file_id, created_at)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (user_id, card_number, card_holder, photo_file_id, now))
+        INSERT INTO cards (user_id, card_number, card_holder, photo_file_id, is_primary, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (user_id, card_number, card_holder, photo_file_id, is_primary, now))
     card_id = c.lastrowid
     conn.commit()
     conn.close()
@@ -358,7 +414,7 @@ def get_user_cards(user_id):
 def get_verified_cards(user_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT * FROM cards WHERE user_id = ? AND verified = 1", (user_id,))
+    c.execute("SELECT * FROM cards WHERE user_id = ? AND verified = 1 ORDER BY is_primary DESC, id DESC", (user_id,))
     cards = c.fetchall()
     conn.close()
     return cards
@@ -464,6 +520,62 @@ def get_waiting_questions(subject=None):
     return rows
 
 
+def get_teacher_active_question(teacher_id):
+    """سوال فعال دبیر (اگر دارد)"""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('''
+        SELECT id, question_code FROM questions
+        WHERE teacher_id = ? AND status IN ('taken', 'answered')
+        LIMIT 1
+    ''', (teacher_id,))
+    row = c.fetchone()
+    conn.close()
+    return row
+
+
+def get_expired_questions():
+    """سوالاتی که تایم لیمیت دبیر تمام شده"""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    now = get_shamsi_now()
+    c.execute('''
+        SELECT id, question_code, teacher_id
+        FROM questions
+        WHERE status = 'taken' AND timeout_time IS NOT NULL AND timeout_time < ?
+    ''', (now,))
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+
+# ============================================
+# پاسخ دبیر
+# ============================================
+
+def add_question_reply(question_id, teacher_id, message_id, content, file_id=None):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    now = get_shamsi_now()
+    c.execute('''
+        INSERT INTO question_replies (question_id, teacher_id, message_id, content, file_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (question_id, teacher_id, message_id, content, file_id, now))
+    reply_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return reply_id
+
+
+def get_question_replies(question_id):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT * FROM question_replies WHERE question_id = ? ORDER BY id", (question_id,))
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+
 # ============================================
 # تیکت پشتیبانی
 # ============================================
@@ -501,7 +613,22 @@ def get_ticket(ticket_id):
     return t
 
 
+def get_user_open_ticket(user_id):
+    """تیکت باز کاربر (اگر دارد)"""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('''
+        SELECT id, ticket_code, status FROM tickets
+        WHERE user_id = ? AND status IN ('waiting', 'taken', 'answered')
+        ORDER BY id DESC LIMIT 1
+    ''', (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row
+
+
 def get_open_ticket_for_support(support_id):
+    """تیکت باز پشتیبان"""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute('''
@@ -514,31 +641,36 @@ def get_open_ticket_for_support(support_id):
     return row[0] if row else None
 
 
-def take_ticket(ticket_id, support_id, support_username):
+def take_ticket(ticket_id, support_id, support_username, support_name):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     now = get_shamsi_now()
+    from config import SUPPORT_TIMEOUT_HOURS
+    timeout = (jdatetime.datetime.now() + jdatetime.timedelta(hours=SUPPORT_TIMEOUT_HOURS)).strftime("%Y/%m/%d %H:%M:%S")
     c.execute('''
         UPDATE tickets
         SET status = 'taken',
             support_id = ?,
             support_username = ?,
-            support_taken_time = ?
+            support_name = ?,
+            support_taken_time = ?,
+            timeout_time = ?
         WHERE id = ?
-    ''', (support_id, support_username, now, ticket_id))
+    ''', (support_id, support_username, support_name, now, timeout, ticket_id))
     conn.commit()
     conn.close()
 
 
-def reply_ticket(ticket_id, reply):
+def reply_ticket(ticket_id, reply, new_timeout_hours=24):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     now = get_shamsi_now()
+    timeout = (jdatetime.datetime.now() + jdatetime.timedelta(hours=new_timeout_hours)).strftime("%Y/%m/%d %H:%M:%S")
     c.execute('''
         UPDATE tickets
-        SET reply = ?, status = 'answered', replied_time = ?
+        SET reply = ?, status = 'answered', replied_time = ?, timeout_time = ?
         WHERE id = ?
-    ''', (reply, now, ticket_id))
+    ''', (reply, now, timeout, ticket_id))
     conn.commit()
     conn.close()
 
@@ -556,16 +688,34 @@ def close_ticket(ticket_id):
     conn.close()
 
 
-def get_support_open_tickets(support_id):
+def get_expired_tickets():
+    """تیکت‌هایی که تایم‌شان تمام شده"""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
+    now = get_shamsi_now()
     c.execute('''
-        SELECT id, ticket_code, status FROM tickets
-        WHERE support_id = ? AND status IN ('taken', 'answered')
-    ''', (support_id,))
+        SELECT id, ticket_code FROM tickets
+        WHERE status IN ('waiting', 'taken', 'answered')
+          AND timeout_time IS NOT NULL
+          AND timeout_time < ?
+    ''', (now,))
     rows = c.fetchall()
     conn.close()
     return rows
+
+
+def add_ticket_message(ticket_id, sender_type, sender_id, message_id, content, file_id=None):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    now = get_shamsi_now()
+    c.execute('''
+        INSERT INTO ticket_messages (ticket_id, sender_type, sender_id, message_id, content, file_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (ticket_id, sender_type, sender_id, message_id, content, file_id, now))
+    msg_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return msg_id
 
 
 # ============================================
@@ -588,14 +738,14 @@ def add_transaction(user_id, amount, card_number, transaction_id, status, type_)
 # پرداخت زرین‌پال
 # ============================================
 
-def create_payment_record(user_id, authority, amount, description):
+def create_payment_record(user_id, authority, amount, description, card_id=None):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     now = get_shamsi_now()
     c.execute('''
-        INSERT INTO payments (user_id, authority, amount, description, created_at)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (user_id, authority, amount, description, now))
+        INSERT INTO payments (user_id, authority, amount, description, card_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (user_id, authority, amount, description, card_id, now))
     payment_id = c.lastrowid
     conn.commit()
     conn.close()
@@ -644,7 +794,7 @@ def get_stats():
     c.execute("SELECT COUNT(*) FROM questions WHERE status = 'waiting'")
     waiting = c.fetchone()[0]
 
-    c.execute("SELECT COUNT(*) FROM questions WHERE status = 'answered'")
+    c.execute("SELECT COUNT(*) FROM questions WHERE status IN ('answered', 'closed')")
     answered = c.fetchone()[0]
 
     c.execute("SELECT COUNT(*) FROM questions WHERE subject = 'زیست'")
