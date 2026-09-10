@@ -28,7 +28,7 @@ from keyboards import (
     get_packages_buttons, get_start_package_activated_buttons,
     get_cards_for_payment, get_invoice_buttons,
     get_back_keyboard, get_cancel_question_keyboard, get_phone_share_keyboard,
-    get_payment_buttons, get_user_ticket_buttons
+    get_payment_buttons, get_user_ticket_buttons, get_cancel_ticket_keyboard
 )
 from texts import (
     FORCE_MSG, NOT_MEMBER_MSG, WELCOME_MSG, MAIN_MENU_TEXT,
@@ -945,7 +945,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await update.message.reply_text(
                 INVITE_TEXT_1.format(invite_link=referral_link),
-                parse_mode="Markdown"
+                disable_web_page_preview=True
             )
             await update.message.reply_text(
                 INVITE_TEXT_2,
@@ -955,7 +955,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"Error in invite: {e}")
             await update.message.reply_text(
-                "⚠️ خطا در نمایش لینک دعوت. لطفاً دوباره تلاش کنید.",
+                f"⚠️ خطا در نمایش لینک دعوت.\n\n"
+                f"🔗 لینک دعوت شما: {referral_link}",
                 reply_markup=get_main_menu_keyboard()
             )
 

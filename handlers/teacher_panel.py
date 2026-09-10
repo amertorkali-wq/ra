@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import jdatetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes
 
 from config import SUBJECTS, TEACHER_TIMEOUT_MINUTES
@@ -260,7 +260,7 @@ async def handle_followup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# نمایش اطلاعات دبیران (با ناوبری)
+# نمایش اطلاعات دبیران (با ناوبری و ویرایش)
 # ============================================
 
 async def show_teacher_bio(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -290,26 +290,43 @@ async def show_teacher_bio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_teacher_navigation_buttons(subject, 0, len(teachers))
 
     try:
-        try:
-            await query.message.delete()
-        except:
-            pass
-
         if image_url:
-            await query.message.reply_photo(
-                photo=image_url,
-                caption=text,
-                reply_markup=keyboard,
-                parse_mode="Markdown"
+            await query.edit_message_media(
+                media=InputMediaPhoto(
+                    media=image_url,
+                    caption=text,
+                    parse_mode="Markdown"
+                ),
+                reply_markup=keyboard
             )
         else:
-            await query.message.reply_text(
+            await query.edit_message_text(
                 text,
                 reply_markup=keyboard,
                 parse_mode="Markdown"
             )
     except Exception as e:
-        print(f"Error showing teacher bio: {e}")
+        print(f"Error show_teacher_bio (edit): {e}")
+        try:
+            try:
+                await query.message.delete()
+            except:
+                pass
+            if image_url:
+                await query.message.reply_photo(
+                    photo=image_url,
+                    caption=text,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+            else:
+                await query.message.reply_text(
+                    text,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+        except Exception as e2:
+            print(f"Error show_teacher_bio (fallback): {e2}")
 
 
 async def navigate_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -332,26 +349,43 @@ async def navigate_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_teacher_navigation_buttons(subject, index, len(teachers))
 
     try:
-        try:
-            await query.message.delete()
-        except:
-            pass
-
         if image_url:
-            await query.message.reply_photo(
-                photo=image_url,
-                caption=text,
-                reply_markup=keyboard,
-                parse_mode="Markdown"
+            await query.edit_message_media(
+                media=InputMediaPhoto(
+                    media=image_url,
+                    caption=text,
+                    parse_mode="Markdown"
+                ),
+                reply_markup=keyboard
             )
         else:
-            await query.message.reply_text(
+            await query.edit_message_text(
                 text,
                 reply_markup=keyboard,
                 parse_mode="Markdown"
             )
     except Exception as e:
-        print(f"Error navigating teacher: {e}")
+        print(f"Error navigate_teacher (edit): {e}")
+        try:
+            try:
+                await query.message.delete()
+            except:
+                pass
+            if image_url:
+                await query.message.reply_photo(
+                    photo=image_url,
+                    caption=text,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+            else:
+                await query.message.reply_text(
+                    text,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+        except Exception as e2:
+            print(f"Error navigate_teacher (fallback): {e2}")
 
 
 async def back_to_about(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -365,7 +399,6 @@ async def back_to_about(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.delete()
         except:
             pass
-
         await query.message.reply_text(
             ABOUT_US_TEXT,
             reply_markup=get_about_buttons(),
