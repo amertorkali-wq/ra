@@ -38,11 +38,12 @@ INVITE_REWARD_QUESTIONS = 3
 
 # ---------- تنظیمات SMS.ir ----------
 SMSIR_API_KEY = "B33h8avj7PGBquAGfOXPLOw7LKYnmJNBXIN9XuxJLrfK0ojd"
-SMSIR_TEMPLATE_ID = 851804  # ✅ شناسه قالب صحیح
+SMSIR_TEMPLATE_ID = 851804
 SMSIR_LINE_NUMBER = "30004505000017"
 
-# درگاه پرداخت
-ZARINPAL_MERCHANT = None
+# ---------- تنظیمات زرین‌پال ----------
+ZARINPAL_MERCHANT = "69e3945ee6d570ad00fd0dad"
+ZARINPAL_SANDBOX = False
 
 # پکیج‌ها
 DEFAULT_PACKAGES = [

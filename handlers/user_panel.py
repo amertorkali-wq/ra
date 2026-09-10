@@ -31,6 +31,7 @@ from texts import (
     INVITE_TEXT_1, INVITE_TEXT_2, RULES_TEXT, HELP_TEXT,
     ADD_CARD_TEXT, CARD_NUMBER_REQUEST, CARD_REGISTERED,
     AUTH_PHONE_REQUEST, AUTH_CODE_REQUEST, AUTH_PHONE_VERIFIED,
+    RULES_FOR_AUTH_TEXT, AUTH_PHONE_SHARE,
     get_account_text
 )
 
@@ -58,8 +59,7 @@ def send_verification_sms(phone_number, code):
         ]
     }
 
-    print(f"🔵 SMS Request URL: {url}")
-    print(f"🔵 SMS Request payload: {payload}")
+    print(f"🔵 SMS Request: mobile={phone_number}, templateId={SMSIR_TEMPLATE_ID}")
 
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=10)
@@ -162,7 +162,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# بررسی عضویت
+# بررسی عضویت (دکمه)
 # ============================================
 
 async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -429,16 +429,17 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif data == "add_card":
         # بررسی شماره تأیید شده
         if not user_info['phone_verified']:
+            # مرحله ۱: نمایش قوانین کامل
             await query.edit_message_text(
-                AUTH_PHONE_REQUEST,
+                RULES_FOR_AUTH_TEXT,
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("🔙 برگشت", callback_data="auth")]
                 ]),
                 parse_mode="Markdown"
             )
-            # ارسال کیبورد اشتراک‌گذاری شماره
+            # مرحله ۲: ارسال پیام جداگانه با دکمه اشتراک‌گذاری شماره
             await query.message.reply_text(
-                "👇 *لطفاً روی دکمه زیر بزنید:*",
+                AUTH_PHONE_SHARE,
                 reply_markup=ReplyKeyboardMarkup(
                     [[KeyboardButton("📱 اشتراک‌گذاری شماره من", request_contact=True)]],
                     resize_keyboard=True,
@@ -561,17 +562,18 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     print(f"🟡 SMS Result: {success}")
 
-    # همیشه کد را نمایش بده (چه پیامک ارسال شده چه نه)
     context.user_data['awaiting_auth_phone'] = False
     context.user_data['awaiting_auth_code'] = True
 
     if success:
+        # پیامک ارسال شد - فقط درخواست کد
         await update.message.reply_text(
             AUTH_CODE_REQUEST,
             parse_mode="Markdown",
             reply_markup=ReplyKeyboardRemove()
         )
     else:
+        # پیامک ارسال نشد - کد را نمایش بده
         await update.message.reply_text(
             f"⚠️ *سرویس پیامک موقتاً در دسترس نیست.*\n\n"
             f"📨 کد تأیید شما: `{code}`\n\n"
@@ -630,7 +632,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_info = get_user_info(user_id)
 
-    # اگر کاربر در دیتابیس نبود، بساز
     if not user_info:
         if not get_user(user_id):
             create_user(user_id, user.username, user.first_name, user.last_name)
@@ -654,9 +655,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['awaiting_auth_code'] = False
             update_user(user_id, phone_verified=1)
 
-            # حالا برو به مرحله عکس کارت
             context.user_data['awaiting_card_photo'] = True
 
+            # نمایش پیام تأیید قوانین + درخواست عکس کارت
+            await update.message.reply_text(
+                AUTH_PHONE_REQUEST,
+                parse_mode="Markdown"
+            )
             await update.message.reply_text(
                 AUTH_PHONE_VERIFIED,
                 parse_mode="Markdown"

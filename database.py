@@ -5,15 +5,11 @@ import jdatetime
 DB_NAME = "violex.db"
 
 
-# ============================================
-# راه‌اندازی دیتابیس
-# ============================================
-
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
-    # ---------- جدول کاربران ----------
+    # کاربران
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -38,7 +34,7 @@ def init_db():
         )
     ''')
 
-    # ---------- جدول کارت‌های بانکی ----------
+    # کارت‌ها
     c.execute('''
         CREATE TABLE IF NOT EXISTS cards (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,7 +48,7 @@ def init_db():
         )
     ''')
 
-    # ---------- جدول سوالات ----------
+    # سوالات
     c.execute('''
         CREATE TABLE IF NOT EXISTS questions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,7 +68,7 @@ def init_db():
         )
     ''')
 
-    # ---------- جدول تراکنش‌ها ----------
+    # تراکنش‌ها
     c.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,7 +82,7 @@ def init_db():
         )
     ''')
 
-    # ---------- جدول تیکت‌های پشتیبانی ----------
+    # تیکت‌های پشتیبانی
     c.execute('''
         CREATE TABLE IF NOT EXISTS tickets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,7 +100,7 @@ def init_db():
         )
     ''')
 
-    # ---------- جدول کارکنان ----------
+    # کارکنان
     c.execute('''
         CREATE TABLE IF NOT EXISTS staff (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -117,11 +113,27 @@ def init_db():
         )
     ''')
 
-    # ---------- جدول تنظیمات ----------
+    # تنظیمات
     c.execute('''
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT
+        )
+    ''')
+
+    # پرداخت‌های زرین‌پال
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            authority TEXT UNIQUE,
+            amount INTEGER,
+            description TEXT,
+            status TEXT DEFAULT 'pending',
+            ref_id TEXT,
+            card_pan TEXT,
+            created_at TEXT,
+            verified_at TEXT
         )
     ''')
 
@@ -131,7 +143,7 @@ def init_db():
 
 
 # ============================================
-# توابع تاریخ شمسی
+# تاریخ شمسی
 # ============================================
 
 def get_shamsi_now():
@@ -148,7 +160,7 @@ def get_shamsi_future_date(days):
 
 
 # ============================================
-# توابع کاربر
+# کاربران
 # ============================================
 
 def get_user(user_id):
@@ -237,7 +249,6 @@ def get_all_users():
 
 
 def get_user_role(user_id):
-    """دریافت نقش کاربر"""
     from config import OWNER_ID
     if user_id == OWNER_ID:
         return "owner"
@@ -297,7 +308,7 @@ def get_staff_list(role):
 
 
 # ============================================
-# توابع کد تأیید
+# کد تأیید
 # ============================================
 
 def set_verification_code(user_id, code):
@@ -318,7 +329,7 @@ def get_verification_code(user_id):
 
 
 # ============================================
-# توابع کارت
+# کارت
 # ============================================
 
 def add_card(user_id, card_number, card_holder, photo_file_id):
@@ -382,7 +393,7 @@ def delete_card(card_id):
 
 
 # ============================================
-# توابع سوال
+# سوال
 # ============================================
 
 def generate_question_code(subject):
@@ -454,7 +465,7 @@ def get_waiting_questions(subject=None):
 
 
 # ============================================
-# توابع تیکت پشتیبانی
+# تیکت پشتیبانی
 # ============================================
 
 def generate_ticket_code():
@@ -491,7 +502,6 @@ def get_ticket(ticket_id):
 
 
 def get_open_ticket_for_support(support_id):
-    """بررسی اینکه پشتیبان تیکت باز دارد یا نه"""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute('''
@@ -505,7 +515,6 @@ def get_open_ticket_for_support(support_id):
 
 
 def take_ticket(ticket_id, support_id, support_username):
-    """تخصیص تیکت به پشتیبان"""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     now = get_shamsi_now()
@@ -548,7 +557,6 @@ def close_ticket(ticket_id):
 
 
 def get_support_open_tickets(support_id):
-    """تیکت‌های باز پشتیبان"""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute('''
@@ -561,7 +569,7 @@ def get_support_open_tickets(support_id):
 
 
 # ============================================
-# توابع تراکنش
+# تراکنش
 # ============================================
 
 def add_transaction(user_id, amount, card_number, transaction_id, status, type_):
@@ -572,6 +580,49 @@ def add_transaction(user_id, amount, card_number, transaction_id, status, type_)
         INSERT INTO transactions (user_id, amount, card_number, transaction_id, status, type, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
     ''', (user_id, amount, card_number, transaction_id, status, type_, now))
+    conn.commit()
+    conn.close()
+
+
+# ============================================
+# پرداخت زرین‌پال
+# ============================================
+
+def create_payment_record(user_id, authority, amount, description):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    now = get_shamsi_now()
+    c.execute('''
+        INSERT INTO payments (user_id, authority, amount, description, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (user_id, authority, amount, description, now))
+    payment_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return payment_id
+
+
+def get_payment_by_authority(authority):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT * FROM payments WHERE authority = ?", (authority,))
+    p = c.fetchone()
+    conn.close()
+    return p
+
+
+def update_payment_status(authority, status, ref_id=None, card_pan=None):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    now = get_shamsi_now()
+    if status == 'verified':
+        c.execute('''
+            UPDATE payments
+            SET status = ?, ref_id = ?, card_pan = ?, verified_at = ?
+            WHERE authority = ?
+        ''', (status, ref_id, card_pan, now, authority))
+    else:
+        c.execute("UPDATE payments SET status = ? WHERE authority = ?", (status, authority))
     conn.commit()
     conn.close()
 
