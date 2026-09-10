@@ -2,10 +2,6 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMa
 from config import DEFAULT_PACKAGES, CHANNEL_LINK
 
 
-# ============================================
-# دکمه‌های جوین اجباری
-# ============================================
-
 def get_force_buttons():
     keyboard = [
         [InlineKeyboardButton("📢 عضویت در کانال", url=CHANNEL_LINK)],
@@ -13,10 +9,6 @@ def get_force_buttons():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-
-# ============================================
-# منوی اصلی (Reply Keyboard)
-# ============================================
 
 def get_main_menu_keyboard():
     keyboard = [
@@ -46,10 +38,6 @@ def get_cancel_question_keyboard():
     keyboard = [[KeyboardButton("❌ لغو سوال")]]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-
-# ============================================
-# دکمه‌های شیشه‌ای (Inline)
-# ============================================
 
 def get_balance_buttons():
     keyboard = [
@@ -120,10 +108,6 @@ def get_invoice_buttons(use_wallet=False):
     return InlineKeyboardMarkup(keyboard)
 
 
-# ============================================
-# دکمه‌های سوال در گروه دبیران
-# ============================================
-
 def get_teacher_question_buttons(question_id):
     keyboard = [
         [InlineKeyboardButton("پاسخ دادن ✅", callback_data=f"t_answer_{question_id}")],
@@ -137,10 +121,6 @@ def get_teacher_close_button(question_id):
     return InlineKeyboardMarkup(keyboard)
 
 
-# ============================================
-# دکمه‌های دانش‌آموز بعد از پاسخ
-# ============================================
-
 def get_student_answer_buttons(question_id):
     keyboard = [
         [InlineKeyboardButton("متوجه شدم ✅", callback_data=f"s_understood_{question_id}")],
@@ -149,10 +129,6 @@ def get_student_answer_buttons(question_id):
     return InlineKeyboardMarkup(keyboard)
 
 
-# ============================================
-# دکمه‌های پشتیبانی
-# ============================================
-
 def get_support_ticket_buttons(ticket_id):
     keyboard = [
         [InlineKeyboardButton("پاسخ دادن ✅", callback_data=f"sup_answer_{ticket_id}")],
@@ -160,10 +136,6 @@ def get_support_ticket_buttons(ticket_id):
     ]
     return InlineKeyboardMarkup(keyboard)
 
-
-# ============================================
-# دکمه‌های حسابداری
-# ============================================
 
 def get_card_verify_buttons(card_id):
     keyboard = [
@@ -180,10 +152,6 @@ def get_transaction_buttons(transaction_id):
     ]
     return InlineKeyboardMarkup(keyboard)
 
-
-# ============================================
-# دکمه‌های پنل مدیریت
-# ============================================
 
 def get_admin_panel_keyboard():
     keyboard = [
@@ -203,9 +171,7 @@ def get_admin_panel_keyboard():
 
 
 def get_admin_back_button():
-    keyboard = [
-        [InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_back")],
-    ]
+    keyboard = [[InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_back")]]
     return InlineKeyboardMarkup(keyboard)
 
 

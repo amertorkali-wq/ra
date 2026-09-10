@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
@@ -8,7 +8,8 @@ from config import (
 )
 from database import (
     get_user, create_user, update_user, get_user_cards, get_verified_cards,
-    add_card, delete_card, create_question, create_ticket, add_transaction
+    add_card, delete_card, create_question, create_ticket, add_transaction,
+    reward_inviter, get_shamsi_now, get_shamsi_future_date
 )
 from keyboards import (
     get_force_buttons, get_main_menu_keyboard, get_lesson_keyboard,
@@ -22,14 +23,9 @@ from texts import (
     BUY_QUESTION_TEXT, NO_PACKAGE_MSG, NO_QUESTION_MSG, SUPPORT_TEXT,
     INVITE_TEXT_1, INVITE_TEXT_2, RULES_TEXT, HELP_TEXT,
     ADD_CARD_TEXT, CARD_NUMBER_REQUEST, CARD_REGISTERED,
-    ASK_SUBJECT_TEXT, ASK_QUESTION_TEXT, ASK_DESCRIPTION_TEXT,
-    QUESTION_REGISTERED, CANCEL_QUESTION, get_account_text
+    get_account_text
 )
 
-
-# ============================================
-# بررسی عضویت کاربر
-# ============================================
 
 async def is_user_member(application, user_id: int) -> bool:
     try:
@@ -57,21 +53,20 @@ def get_user_info(user_id):
         'package_expire_date': user[9],
         'referrals': user[10],
         'invited_by': user[11],
-        'has_start_package': user[12],
-        'is_blocked': user[13],
-        'role': user[14],
+        'has_start_package': user[13],
+        'is_blocked': user[14],
+        'role': user[15],
     }
 
 
 # ============================================
-# دستور /start
+# /start
 # ============================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
 
-    # بررسی لینک دعوت
     invited_by = None
     if context.args and len(context.args) > 0:
         try:
@@ -81,12 +76,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-    # ساخت کاربر اگر وجود ندارد
-    if not get_user(user_id):
+    is_new = not get_user(user_id)
+    if is_new:
         create_user(user_id, user.username, user.first_name, user.last_name, invited_by)
 
     # بررسی عضویت
     if await is_user_member(context.application, user_id):
+        # پاداش به دعوت‌کننده بعد از عضویت
+        if is_new:
+            inviter_id = reward_inviter(user_id)
+            if inviter_id:
+                try:
+                    await context.bot.send_message(
+                        chat_id=inviter_id,
+                        text=(
+                            "🎉 تبریک! یک نفر با لینک دعوت شما وارد ربات شد و در کانال عضو شد.\n\n"
+                            "🎁 پاداش شما:\n"
+                            "💰 ۴٬۰۰۰ تومان به کیف پول\n"
+                            "❓ ۳ سوال اضافه"
+                        )
+                    )
+                except:
+                    pass
+
         await update.message.reply_text(
             WELCOME_MSG,
             reply_markup=get_main_menu_keyboard()
@@ -100,7 +112,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# بررسی عضویت (دکمه)
+# بررسی عضویت
 # ============================================
 
 async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -111,6 +123,22 @@ async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE)
     message = query.message
 
     if await is_user_member(context.application, user_id):
+        # پاداش به دعوت‌کننده
+        inviter_id = reward_inviter(user_id)
+        if inviter_id:
+            try:
+                await context.bot.send_message(
+                    chat_id=inviter_id,
+                    text=(
+                        "🎉 تبریک! یک نفر با لینک دعوت شما وارد ربات شد و در کانال عضو شد.\n\n"
+                        "🎁 پاداش شما:\n"
+                        "💰 ۴٬۰۰۰ تومان به کیف پول\n"
+                        "❓ ۳ سوال اضافه"
+                    )
+                )
+            except:
+                pass
+
         try:
             await message.delete()
         except:
@@ -138,7 +166,6 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
     user_id = query.from_user.id
     user_info = get_user_info(user_id)
 
-    # ---- احراز هویت ----
     if data == "auth":
         await query.edit_message_text(
             AUTH_TEXT,
@@ -146,7 +173,6 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
             parse_mode="Markdown"
         )
 
-    # ---- خرید پکیج ----
     elif data == "buy_package":
         cards = get_verified_cards(user_id)
         if not cards:
@@ -163,7 +189,6 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
                 parse_mode="Markdown"
             )
 
-    # ---- خرید سوال ----
     elif data == "buy_question":
         await query.edit_message_text(
             BUY_QUESTION_TEXT,
@@ -173,7 +198,6 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
         )
         context.user_data['awaiting_question_count'] = True
 
-    # ---- بازگشت به منوی اصلی ----
     elif data == "back_to_main":
         try:
             await query.message.delete()
@@ -185,14 +209,12 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
             parse_mode="Markdown"
         )
 
-    # ---- بازگشت به منوی افزایش موجودی ----
     elif data == "back_to_balance":
         await query.edit_message_text(
             INCREASE_BALANCE_TEXT,
             reply_markup=get_balance_buttons()
         )
 
-    # ---- انتخاب پکیج ----
     elif data.startswith("buy_pkg_"):
         pkg_id = int(data.split("_")[2])
         pkg = next((p for p in DEFAULT_PACKAGES if p['id'] == pkg_id), None)
@@ -201,7 +223,6 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
             await query.edit_message_text("⚠️ پکیج یافت نشد.")
             return
 
-        # پکیج استارت
         if pkg['is_start']:
             if user_info['has_start_package']:
                 await query.edit_message_text(
@@ -212,7 +233,7 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
                 )
                 return
 
-            expire_date = (datetime.now() + timedelta(days=pkg['days'])).strftime("%Y/%m/%d")
+            expire_date = get_shamsi_future_date(pkg['days'])
             update_user(
                 user_id,
                 active_package=pkg['name'],
@@ -240,18 +261,14 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
 
         context.user_data['selected_package'] = pkg
 
-        text = (
+        await query.edit_message_text(
             f"💳 لطفاً کارت بانکی که قصد پرداخت با آن را دارید انتخاب کنید.\n\n"
             f"📦 پکیج انتخابی: {pkg['name']}\n"
             f"💰 مبلغ: {pkg['price']:,} تومان\n"
-            f"❓ تعداد سوال: {pkg['questions']}"
-        )
-        await query.edit_message_text(
-            text,
+            f"❓ تعداد سوال: {pkg['questions']}",
             reply_markup=get_cards_for_payment(cards)
         )
 
-    # ---- انتخاب کارت برای پرداخت ----
     elif data.startswith("pay_card_"):
         card_id = int(data.split("_")[2])
         pkg = context.user_data.get('selected_package')
@@ -288,13 +305,12 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
                 reply_markup=get_invoice_buttons(use_wallet=False)
             )
 
-    # ---- پرداخت با کیف پول ----
     elif data == "pay_wallet":
         pkg = context.user_data.get('selected_package')
         if pkg:
             new_wallet = user_info['wallet'] - pkg['price']
             new_questions = user_info['questions_remaining'] + pkg['questions']
-            expire_date = (datetime.now() + timedelta(days=pkg['days'])).strftime("%Y/%m/%d")
+            expire_date = get_shamsi_future_date(pkg['days'])
 
             update_user(
                 user_id,
@@ -314,27 +330,19 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
                 f"⏳ اعتبار تا: {expire_date}"
             )
 
-    # ---- پرداخت از درگاه ----
     elif data == "pay_gateway":
         await query.edit_message_text(
             "🔗 در حال انتقال به درگاه پرداخت...\n\n"
-            "⚠️ درگاه زرین‌پال هنوز متصل نشده است.\n"
-            "لطفاً با پشتیبانی تماس بگیرید.",
+            "⚠️ درگاه زرین‌پال هنوز متصل نشده است.",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("☎️ پشتیبانی", url="https://t.me/support_violex")],
                 [InlineKeyboardButton("🔙 برگشت", callback_data="back_to_balance")]
             ])
         )
 
-    # ---- پرداخت کردم ----
     elif data == "paid_check":
         await query.edit_message_text(
             "⏳ در حال بررسی پرداخت...\n\n"
-            "⚠️ درگاه زرین‌پال هنوز متصل نشده است.\n"
-            "لطفاً با پشتیبانی تماس بگیرید.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("☎️ پشتیبانی", url="https://t.me/support_violex")]
-            ])
+            "⚠️ درگاه زرین‌پال هنوز متصل نشده است."
         )
 
 
@@ -348,7 +356,6 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
     data = query.data
     user_id = query.from_user.id
 
-    # ---- لیست کارت‌ها ----
     if data == "card_list":
         cards = get_user_cards(user_id)
         if cards:
@@ -361,7 +368,6 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
             text = "🧾 شما هیچ کارتی ثبت نکرده‌اید."
         await query.edit_message_text(text, reply_markup=get_auth_buttons())
 
-    # ---- افزودن کارت ----
     elif data == "add_card":
         await query.edit_message_text(
             ADD_CARD_TEXT,
@@ -371,7 +377,6 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         context.user_data['awaiting_card_photo'] = True
 
-    # ---- حذف کارت ----
     elif data == "remove_card":
         cards = get_user_cards(user_id)
         if not cards:
@@ -390,7 +395,6 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
 
-    # ---- حذف کارت تأیید ----
     elif data.startswith("del_card_"):
         card_id = int(data.split("_")[2])
         delete_card(card_id)
@@ -399,7 +403,6 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
             reply_markup=get_auth_buttons()
         )
 
-    # ---- بازگشت به احراز هویت ----
     elif data == "auth":
         await query.edit_message_text(
             AUTH_TEXT,
@@ -407,7 +410,6 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
             parse_mode="Markdown"
         )
 
-    # ---- بازگشت به منوی اصلی ----
     elif data == "back_to_main":
         try:
             await query.message.delete()
@@ -420,14 +422,9 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
 
-# ============================================
-# دکمه‌های درباره ما
-# ============================================
-
 async def handle_about_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    # فعلاً هیچ کاری نمی‌کند
 
 
 # ============================================
@@ -452,7 +449,6 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
-    # عکس کارت
     if context.user_data.get('awaiting_card_photo'):
         context.user_data['card_photo'] = update.message.photo[-1].file_id
         context.user_data['awaiting_card_photo'] = False
@@ -460,14 +456,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(CARD_NUMBER_REQUEST)
         return
 
-    # عکس سوال
     if context.user_data.get('awaiting_question'):
         context.user_data['awaiting_question'] = False
         context.user_data['question_file'] = update.message.photo[-1].file_id
         context.user_data['question_text'] = update.message.caption or '[عکس]'
         context.user_data['awaiting_description'] = True
         await update.message.reply_text(
-            ASK_DESCRIPTION_TEXT,
+            "✍️ لطفاً مشکل خود را توضیح دهید.",
             reply_markup=get_cancel_question_keyboard()
         )
         return
@@ -482,7 +477,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_id = user.id
 
-    # ---- بررسی عضویت ----
     if not await is_user_member(context.application, user.id):
         await update.message.reply_text(
             "⛔ لطفاً ابتدا در کانال عضو شوید و سپس /start را بزنید.",
@@ -492,7 +486,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_info = get_user_info(user_id)
 
-    # ---- حالت انتظار شماره کارت ----
+    # به‌روزرسانی اطلاعات کاربر
+    update_user(
+        user_id,
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name
+    )
+
+    # حالت انتظار شماره کارت
     if context.user_data.get('awaiting_card_number'):
         if text and text.isdigit() and len(text) == 16:
             card_photo = context.user_data.get('card_photo')
@@ -502,7 +504,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             await update.message.reply_text(CARD_REGISTERED)
 
-            # ارسال به گروه حسابداری
             try:
                 await context.bot.send_photo(
                     chat_id=ACCOUNTING_GROUP,
@@ -524,12 +525,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 print(f"Error sending to accounting: {e}")
         else:
-            await update.message.reply_text(
-                "⚠️ شماره کارت باید ۱۶ رقم عددی باشد. لطفاً دوباره ارسال کنید."
-            )
+            await update.message.reply_text("⚠️ شماره کارت باید ۱۶ رقم عددی باشد.")
         return
 
-    # ---- حالت انتظار تعداد سوال ----
+    # حالت انتظار تعداد سوال
     if context.user_data.get('awaiting_question_count'):
         if text and text.isdigit():
             count = int(text)
@@ -565,19 +564,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ لطفاً یک عدد معتبر وارد کنید.")
         return
 
-    # ============================================
-    # دکمه‌های منوی اصلی
-    # ============================================
-
-    # ---- حساب من ----
+    # منوی اصلی
     if text == "👤 حساب من":
-        now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        now = get_shamsi_now()
         await update.message.reply_text(
             get_account_text(user_info, user_id, now),
             reply_markup=get_main_menu_keyboard()
         )
 
-    # ---- دعوت دوستان ----
     elif text == "🤝 دعوت دوستان":
         referral_link = f"{BOT_LINK}{user_id}"
         await update.message.reply_text(
@@ -588,23 +582,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_menu_keyboard()
         )
 
-    # ---- درباره ما ----
     elif text == "📋 درباره ما":
-        try:
-            await update.message.reply_photo(
-                photo=ABOUT_IMAGE_URL,
-                caption=ABOUT_US_TEXT,
-                reply_markup=get_about_buttons(),
-                parse_mode="Markdown"
-            )
-        except Exception:
+        if ABOUT_IMAGE_URL:
+            try:
+                await update.message.reply_photo(
+                    photo=ABOUT_IMAGE_URL,
+                    caption=ABOUT_US_TEXT,
+                    reply_markup=get_about_buttons(),
+                    parse_mode="Markdown"
+                )
+            except:
+                await update.message.reply_text(
+                    ABOUT_US_TEXT,
+                    reply_markup=get_about_buttons(),
+                    parse_mode="Markdown"
+                )
+        else:
             await update.message.reply_text(
                 ABOUT_US_TEXT,
                 reply_markup=get_about_buttons(),
                 parse_mode="Markdown"
             )
 
-    # ---- پشتیبانی ----
     elif text == "☎️ پشتیبانی":
         context.user_data['awaiting_support'] = True
         await update.message.reply_text(
@@ -612,7 +611,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_back_keyboard()
         )
 
-    # ---- قوانین ----
     elif text == "🆘 قوانین":
         await update.message.reply_text(
             RULES_TEXT,
@@ -620,14 +618,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
-    # ---- راهنما ----
     elif text == "📖 راهنما":
         await update.message.reply_text(
             HELP_TEXT,
             reply_markup=get_main_menu_keyboard()
         )
 
-    # ---- ارسال سوال ----
     elif text == "📚 ارسال سوال":
         if not user_info['active_package'] or user_info['active_package'] == '0':
             await update.message.reply_text(
@@ -645,18 +641,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         else:
             await update.message.reply_text(
-                ASK_SUBJECT_TEXT,
+                "📚 لطفاً درس مورد نظر خود را انتخاب کنید.",
                 reply_markup=get_lesson_keyboard()
             )
 
-    # ---- افزایش موجودی ----
     elif text == "💸 افزایش موجودی":
         await update.message.reply_text(
             INCREASE_BALANCE_TEXT,
             reply_markup=get_balance_buttons()
         )
 
-    # ---- انتخاب درس ----
     elif text in ["🧬 زیست", "🧪 شیمی", "⚡️ فیزیک", "📐 ریاضی"]:
         if not user_info['active_package'] or user_info['active_package'] == '0':
             await update.message.reply_text(NO_PACKAGE_MSG)
@@ -667,19 +661,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['selected_subject'] = subject_name
             context.user_data['awaiting_question'] = True
             await update.message.reply_text(
-                ASK_QUESTION_TEXT,
+                "📩 لطفاً سوال خود را ارسال کنید.\n\n"
+                "❗ سوال خود را همراه با پاسخنامه سوال ارسال کنید.\n\n"
+                "🚫 در این بخش ارسال ویس مجاز نیست.",
                 reply_markup=get_cancel_question_keyboard()
             )
 
-    # ---- لغو سوال ----
     elif text == "❌ لغو سوال":
         context.user_data.clear()
         await update.message.reply_text(
-            CANCEL_QUESTION,
+            "❌ سوال لغو شد.",
             reply_markup=get_main_menu_keyboard()
         )
 
-    # ---- برگشت ----
     elif text == "🔙 برگشت":
         context.user_data.clear()
         await update.message.reply_text(
@@ -688,7 +682,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
-    # ---- پاسخ پشتیبانی ----
     elif context.user_data.get('awaiting_support'):
         context.user_data['awaiting_support'] = False
         ticket_id, ticket_code = create_ticket(user_id, text)
@@ -716,11 +709,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"✅ پیام شما با موفقیت ثبت شد.\n\n"
             f"🆔 کد پیگیری: {ticket_code}\n\n"
-            f"تیم پشتیبانی به زودی پیام شما را بررسی می‌کند و پاسخ از طریق همین ربات ارسال خواهد شد.",
+            f"تیم پشتیبانی به زودی پیام شما را بررسی می‌کند.",
             reply_markup=get_main_menu_keyboard()
         )
 
-    # ---- توضیح مشکل سوال ----
     elif context.user_data.get('awaiting_description'):
         context.user_data['awaiting_description'] = False
         subject = context.user_data.get('selected_subject', 'زیست')
@@ -736,11 +728,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_user(user_id, questions_remaining=new_remaining, questions_used=new_used)
 
         await update.message.reply_text(
-            QUESTION_REGISTERED.format(code=code),
+            f"✅ سوال شما با موفقیت ثبت شد.\n\n"
+            f"🆔 کد پیگیری سوال: {code}\n\n"
+            f"📤 سوال برای دبیر مربوطه ارسال شد.\n"
+            f"💠 پس از آماده شدن پاسخ از طریق همین ربات اطلاع داده خواهد شد.",
             reply_markup=get_main_menu_keyboard()
         )
 
-        # ارسال به گروه دبیران
         subject_info = SUBJECTS.get(subject)
         if subject_info:
             try:
@@ -764,17 +758,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         context.user_data.clear()
 
-    # ---- دریافت سوال (متن) ----
     elif context.user_data.get('awaiting_question'):
         context.user_data['awaiting_question'] = False
         context.user_data['question_text'] = text
         context.user_data['awaiting_description'] = True
         await update.message.reply_text(
-            ASK_DESCRIPTION_TEXT,
+            "✍️ لطفاً مشکل خود را توضیح دهید.",
             reply_markup=get_cancel_question_keyboard()
         )
 
-    # ---- پیام پیش‌فرض ----
     else:
         await update.message.reply_text(
             "⚠️ لطفاً از گزینه‌های منو استفاده کنید.",

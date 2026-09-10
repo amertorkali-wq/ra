@@ -1,18 +1,14 @@
 import sqlite3
 from datetime import datetime
+import jdatetime
 
 DB_NAME = "violex.db"
 
-
-# ============================================
-# راه‌اندازی دیتابیس
-# ============================================
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
-    # ---------- جدول کاربران ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -27,6 +23,7 @@ def init_db():
             package_expire_date TEXT DEFAULT '-',
             referrals INTEGER DEFAULT 0,
             invited_by INTEGER DEFAULT NULL,
+            invited_by_rewarded INTEGER DEFAULT 0,
             has_start_package INTEGER DEFAULT 0,
             is_blocked INTEGER DEFAULT 0,
             role TEXT DEFAULT 'user',
@@ -34,7 +31,6 @@ def init_db():
         )
     ''')
 
-    # ---------- جدول کارت‌های بانکی ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS cards (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,7 +44,6 @@ def init_db():
         )
     ''')
 
-    # ---------- جدول سوالات ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS questions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,7 +61,6 @@ def init_db():
         )
     ''')
 
-    # ---------- جدول تراکنش‌ها ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,7 +74,6 @@ def init_db():
         )
     ''')
 
-    # ---------- جدول تیکت‌های پشتیبانی ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS tickets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,7 +86,6 @@ def init_db():
         )
     ''')
 
-    # ---------- جدول کارکنان (ادمین، دبیر، پشتیبان، حسابدار) ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS staff (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,7 +97,6 @@ def init_db():
         )
     ''')
 
-    # ---------- جدول تنظیمات ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
@@ -116,6 +107,28 @@ def init_db():
     conn.commit()
     conn.close()
     print("✅ دیتابیس با موفقیت راه‌اندازی شد.")
+
+
+# ============================================
+# توابع کمکی تاریخ شمسی
+# ============================================
+
+def get_shamsi_now():
+    """تاریخ و ساعت شمسی فعلی"""
+    now = jdatetime.datetime.now()
+    return now.strftime("%Y/%m/%d %H:%M:%S")
+
+
+def get_shamsi_date():
+    """تاریخ شمسی بدون ساعت"""
+    now = jdatetime.datetime.now()
+    return now.strftime("%Y/%m/%d")
+
+
+def get_shamsi_future_date(days):
+    """تاریخ شمسی بعد از N روز"""
+    future = jdatetime.datetime.now() + jdatetime.timedelta(days=days)
+    return future.strftime("%Y/%m/%d")
 
 
 # ============================================
@@ -134,7 +147,7 @@ def get_user(user_id):
 def create_user(user_id, username, first_name, last_name, invited_by=None):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+    now = get_shamsi_now()
 
     c.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
     if c.fetchone():
@@ -147,14 +160,6 @@ def create_user(user_id, username, first_name, last_name, invited_by=None):
         VALUES (?, ?, ?, ?, ?, ?, '-')
     ''', (user_id, username, first_name, last_name, invited_by, now))
     conn.commit()
-
-    if invited_by:
-        c.execute("SELECT user_id FROM users WHERE user_id = ?", (invited_by,))
-        if c.fetchone():
-            c.execute("UPDATE users SET referrals = referrals + 1 WHERE user_id = ?", (invited_by,))
-            c.execute("UPDATE users SET wallet = wallet + ? WHERE user_id = ?", (4000, invited_by))
-            conn.commit()
-
     conn.close()
     return True
 
@@ -168,6 +173,49 @@ def update_user(user_id, **kwargs):
         c.execute(f"UPDATE users SET {key} = ? WHERE user_id = ?", (value, user_id))
     conn.commit()
     conn.close()
+
+
+def reward_inviter(invited_user_id):
+    """پاداش به دعوت‌کننده بعد از عضویت در کانال"""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    c.execute("SELECT invited_by, invited_by_rewarded FROM users WHERE user_id = ?", (invited_user_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return None
+
+    inviter_id, already_rewarded = row
+
+    if already_rewarded or not inviter_id:
+        conn.close()
+        return None
+
+    # بررسی وجود دعوت‌کننده
+    c.execute("SELECT wallet, referrals, questions_remaining FROM users WHERE user_id = ?", (inviter_id,))
+    inviter = c.fetchone()
+    if not inviter:
+        conn.close()
+        return None
+
+    from config import INVITE_REWARD, INVITE_REWARD_QUESTIONS
+
+    new_wallet = inviter[0] + INVITE_REWARD
+    new_referrals = inviter[1] + 1
+    new_questions = inviter[2] + INVITE_REWARD_QUESTIONS
+
+    c.execute('''
+        UPDATE users
+        SET wallet = ?, referrals = ?, questions_remaining = ?
+        WHERE user_id = ?
+    ''', (new_wallet, new_referrals, new_questions, inviter_id))
+
+    c.execute("UPDATE users SET invited_by_rewarded = 1 WHERE user_id = ?", (invited_user_id,))
+
+    conn.commit()
+    conn.close()
+    return inviter_id
 
 
 def get_all_users():
@@ -209,7 +257,7 @@ def is_staff(user_id, role=None):
 def add_staff(user_id, role, subject=None, added_by=None):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+    now = get_shamsi_now()
     c.execute('''
         INSERT INTO staff (user_id, role, subject, added_by, created_at)
         VALUES (?, ?, ?, ?, ?)
@@ -245,7 +293,7 @@ def get_staff_list(role):
 def add_card(user_id, card_number, card_holder, photo_file_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+    now = get_shamsi_now()
     c.execute('''
         INSERT INTO cards (user_id, card_number, card_holder, photo_file_id, created_at)
         VALUES (?, ?, ?, ?, ?)
@@ -320,7 +368,7 @@ def generate_question_code(subject):
 def create_question(user_id, subject, question_text, description, file_id=None):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+    now = get_shamsi_now()
     code = generate_question_code(subject)
     c.execute('''
         INSERT INTO questions
@@ -375,7 +423,7 @@ def get_waiting_questions(subject=None):
 
 
 # ============================================
-# توابع تیکت پشتیبانی
+# توابع تیکت
 # ============================================
 
 def generate_ticket_code():
@@ -390,7 +438,7 @@ def generate_ticket_code():
 def create_ticket(user_id, message):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+    now = get_shamsi_now()
     code = generate_ticket_code()
     c.execute('''
         INSERT INTO tickets (user_id, ticket_code, message, created_at)
@@ -420,13 +468,13 @@ def reply_ticket(ticket_id, reply):
 
 
 # ============================================
-# توابع تراکنش
+# تراکنش
 # ============================================
 
 def add_transaction(user_id, amount, card_number, transaction_id, status, type_):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+    now = get_shamsi_now()
     c.execute('''
         INSERT INTO transactions (user_id, amount, card_number, transaction_id, status, type, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
