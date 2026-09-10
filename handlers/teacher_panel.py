@@ -10,7 +10,7 @@ from database import (
 )
 from keyboards import (
     get_teacher_close_button, get_student_answer_buttons,
-    get_teacher_navigation_buttons
+    get_teacher_navigation_buttons, get_about_buttons
 )
 from texts import (
     TEACHER_ANSWER_REQUEST, TEACHER_BUSY, TEACHER_TAKEN_MSG,
@@ -26,6 +26,10 @@ def is_teacher(user_id):
         is_staff(user_id, role="admin")
     )
 
+
+# ============================================
+# دبیران - پاسخ به سوال
+# ============================================
 
 async def teacher_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -260,10 +264,11 @@ async def handle_followup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# نمایش اطلاعات دبیران (با ناوبری و ویرایش)
+# درباره ما - نمایش اطلاعات دبیران (فقط ویرایش)
 # ============================================
 
 async def show_teacher_bio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نمایش اطلاعات اولین دبیر یک درس با ویرایش پیام"""
     query = update.callback_query
     await query.answer()
 
@@ -290,6 +295,7 @@ async def show_teacher_bio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_teacher_navigation_buttons(subject, 0, len(teachers))
 
     try:
+        # ویرایش پیام فعلی
         if image_url:
             await query.edit_message_media(
                 media=InputMediaPhoto(
@@ -306,12 +312,9 @@ async def show_teacher_bio(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown"
             )
     except Exception as e:
-        print(f"Error show_teacher_bio (edit): {e}")
+        print(f"Error show_teacher_bio: {e}")
+        # اگر ویرایش نشد، پیام جدید بفرست (پیام قبلی رو پاک نکن)
         try:
-            try:
-                await query.message.delete()
-            except:
-                pass
             if image_url:
                 await query.message.reply_photo(
                     photo=image_url,
@@ -330,6 +333,7 @@ async def show_teacher_bio(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def navigate_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ناوبری بین دبیران (ویرایش، پاک نمی‌شود)"""
     query = update.callback_query
     await query.answer()
 
@@ -349,6 +353,7 @@ async def navigate_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_teacher_navigation_buttons(subject, index, len(teachers))
 
     try:
+        # ویرایش پیام فعلی
         if image_url:
             await query.edit_message_media(
                 media=InputMediaPhoto(
@@ -365,12 +370,9 @@ async def navigate_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown"
             )
     except Exception as e:
-        print(f"Error navigate_teacher (edit): {e}")
+        print(f"Error navigate_teacher: {e}")
+        # اگر ویرایش نشد، پیام جدید بفرست (پیام قبلی رو پاک نکن)
         try:
-            try:
-                await query.message.delete()
-            except:
-                pass
             if image_url:
                 await query.message.reply_photo(
                     photo=image_url,
@@ -389,23 +391,36 @@ async def navigate_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def back_to_about(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """بازگشت به لیست دبیران - با ویرایش، نه پاک کردن"""
     query = update.callback_query
     await query.answer()
 
-    from keyboards import get_about_buttons
-
     try:
+        # تلاش برای ویرایش پیام فعلی (اگر پیام عکس داشت، از caption استفاده کن)
         try:
-            await query.message.delete()
+            await query.edit_message_caption(
+                caption=ABOUT_US_TEXT,
+                reply_markup=get_about_buttons(),
+                parse_mode="Markdown"
+            )
         except:
-            pass
-        await query.message.reply_text(
-            ABOUT_US_TEXT,
-            reply_markup=get_about_buttons(),
-            parse_mode="Markdown"
-        )
+            # اگر پیام عکس نداشت، از edit_message_text استفاده کن
+            await query.edit_message_text(
+                ABOUT_US_TEXT,
+                reply_markup=get_about_buttons(),
+                parse_mode="Markdown"
+            )
     except Exception as e:
-        print(f"Error back_to_about: {e}")
+        print(f"Error back_to_about (edit): {e}")
+        # اگر ویرایش نشد، پیام جدید بفرست (پیام قبلی رو پاک نکن)
+        try:
+            await query.message.reply_text(
+                ABOUT_US_TEXT,
+                reply_markup=get_about_buttons(),
+                parse_mode="Markdown"
+            )
+        except Exception as e2:
+            print(f"Error back_to_about (fallback): {e2}")
 
 
 # ============================================
