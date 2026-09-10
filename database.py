@@ -5,11 +5,15 @@ import jdatetime
 DB_NAME = "violex.db"
 
 
+# ============================================
+# راه‌اندازی دیتابیس
+# ============================================
+
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
-    # کاربران
+    # ---------- جدول کاربران ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -34,7 +38,7 @@ def init_db():
         )
     ''')
 
-    # کارت‌ها
+    # ---------- جدول کارت‌های بانکی ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS cards (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,7 +52,7 @@ def init_db():
         )
     ''')
 
-    # سوالات
+    # ---------- جدول سوالات ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS questions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,7 +72,7 @@ def init_db():
         )
     ''')
 
-    # تراکنش‌ها
+    # ---------- جدول تراکنش‌ها ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,7 +86,7 @@ def init_db():
         )
     ''')
 
-    # تیکت‌های پشتیبانی (با فیلدهای جدید)
+    # ---------- جدول تیکت‌های پشتیبانی ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS tickets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,7 +104,7 @@ def init_db():
         )
     ''')
 
-    # کارکنان
+    # ---------- جدول کارکنان ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS staff (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,7 +117,7 @@ def init_db():
         )
     ''')
 
-    # تنظیمات
+    # ---------- جدول تنظیمات ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
@@ -127,7 +131,7 @@ def init_db():
 
 
 # ============================================
-# تاریخ شمسی
+# توابع تاریخ شمسی
 # ============================================
 
 def get_shamsi_now():
@@ -144,7 +148,7 @@ def get_shamsi_future_date(days):
 
 
 # ============================================
-# کاربران
+# توابع کاربر
 # ============================================
 
 def get_user(user_id):
@@ -232,6 +236,19 @@ def get_all_users():
     return users
 
 
+def get_user_role(user_id):
+    """دریافت نقش کاربر"""
+    from config import OWNER_ID
+    if user_id == OWNER_ID:
+        return "owner"
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT role FROM staff WHERE user_id = ? LIMIT 1", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else "user"
+
+
 def is_staff(user_id, role=None):
     from config import OWNER_ID
     if user_id == OWNER_ID:
@@ -280,7 +297,7 @@ def get_staff_list(role):
 
 
 # ============================================
-# کد تأیید
+# توابع کد تأیید
 # ============================================
 
 def set_verification_code(user_id, code):
@@ -301,7 +318,7 @@ def get_verification_code(user_id):
 
 
 # ============================================
-# کارت
+# توابع کارت
 # ============================================
 
 def add_card(user_id, card_number, card_holder, photo_file_id):
@@ -365,7 +382,7 @@ def delete_card(card_id):
 
 
 # ============================================
-# سوال
+# توابع سوال
 # ============================================
 
 def generate_question_code(subject):
@@ -404,6 +421,15 @@ def get_question(question_id):
     return q
 
 
+def get_question_by_code(code):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT * FROM questions WHERE question_code = ?", (code,))
+    q = c.fetchone()
+    conn.close()
+    return q
+
+
 def update_question(question_id, **kwargs):
     if not kwargs:
         return
@@ -415,8 +441,20 @@ def update_question(question_id, **kwargs):
     conn.close()
 
 
+def get_waiting_questions(subject=None):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    if subject:
+        c.execute("SELECT * FROM questions WHERE status = 'waiting' AND subject = ? ORDER BY id", (subject,))
+    else:
+        c.execute("SELECT * FROM questions WHERE status = 'waiting' ORDER BY id")
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+
 # ============================================
-# تیکت پشتیبانی
+# توابع تیکت پشتیبانی
 # ============================================
 
 def generate_ticket_code():
@@ -523,7 +561,7 @@ def get_support_open_tickets(support_id):
 
 
 # ============================================
-# تراکنش
+# توابع تراکنش
 # ============================================
 
 def add_transaction(user_id, amount, card_number, transaction_id, status, type_):
