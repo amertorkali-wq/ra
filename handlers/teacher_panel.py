@@ -3,7 +3,7 @@ import jdatetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes
 
-from config import SUBJECTS, TEACHER_TIMEOUT_MINUTES
+from config import SUBJECTS, TEACHER_TIMEOUT_MINUTES, ABOUT_IMAGE_URL
 from database import (
     get_question, update_question, is_staff, get_user, get_shamsi_now,
     get_teacher_active_question, get_expired_questions
@@ -313,7 +313,6 @@ async def show_teacher_bio(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
     except Exception as e:
         print(f"Error show_teacher_bio: {e}")
-        # اگر ویرایش نشد، پیام جدید بفرست (پیام قبلی رو پاک نکن)
         try:
             if image_url:
                 await query.message.reply_photo(
@@ -353,7 +352,6 @@ async def navigate_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_teacher_navigation_buttons(subject, index, len(teachers))
 
     try:
-        # ویرایش پیام فعلی
         if image_url:
             await query.edit_message_media(
                 media=InputMediaPhoto(
@@ -371,7 +369,6 @@ async def navigate_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
     except Exception as e:
         print(f"Error navigate_teacher: {e}")
-        # اگر ویرایش نشد، پیام جدید بفرست (پیام قبلی رو پاک نکن)
         try:
             if image_url:
                 await query.message.reply_photo(
@@ -391,34 +388,52 @@ async def navigate_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def back_to_about(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """بازگشت به لیست دبیران - با ویرایش، نه پاک کردن"""
+    """بازگشت به لیست دبیران با عکس درباره ما"""
     query = update.callback_query
     await query.answer()
 
     try:
-        # تلاش برای ویرایش پیام فعلی (اگر پیام عکس داشت، از caption استفاده کن)
-        try:
-            await query.edit_message_caption(
-                caption=ABOUT_US_TEXT,
-                reply_markup=get_about_buttons(),
-                parse_mode="Markdown"
+        # اگر عکس درباره ما وجود دارد، عکس رو با متن نمایش بده
+        if ABOUT_IMAGE_URL:
+            await query.edit_message_media(
+                media=InputMediaPhoto(
+                    media=ABOUT_IMAGE_URL,
+                    caption=ABOUT_US_TEXT,
+                    parse_mode="Markdown"
+                ),
+                reply_markup=get_about_buttons()
             )
-        except:
-            # اگر پیام عکس نداشت، از edit_message_text استفاده کن
-            await query.edit_message_text(
-                ABOUT_US_TEXT,
-                reply_markup=get_about_buttons(),
-                parse_mode="Markdown"
-            )
+        else:
+            # اگر عکس نبود، فقط متن
+            try:
+                await query.edit_message_caption(
+                    caption=ABOUT_US_TEXT,
+                    reply_markup=get_about_buttons(),
+                    parse_mode="Markdown"
+                )
+            except:
+                await query.edit_message_text(
+                    ABOUT_US_TEXT,
+                    reply_markup=get_about_buttons(),
+                    parse_mode="Markdown"
+                )
     except Exception as e:
         print(f"Error back_to_about (edit): {e}")
         # اگر ویرایش نشد، پیام جدید بفرست (پیام قبلی رو پاک نکن)
         try:
-            await query.message.reply_text(
-                ABOUT_US_TEXT,
-                reply_markup=get_about_buttons(),
-                parse_mode="Markdown"
-            )
+            if ABOUT_IMAGE_URL:
+                await query.message.reply_photo(
+                    photo=ABOUT_IMAGE_URL,
+                    caption=ABOUT_US_TEXT,
+                    reply_markup=get_about_buttons(),
+                    parse_mode="Markdown"
+                )
+            else:
+                await query.message.reply_text(
+                    ABOUT_US_TEXT,
+                    reply_markup=get_about_buttons(),
+                    parse_mode="Markdown"
+                )
         except Exception as e2:
             print(f"Error back_to_about (fallback): {e2}")
 

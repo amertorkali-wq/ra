@@ -2,7 +2,7 @@ import os
 import requests
 import time
 
-ZIBAL_MERCHANT = os.environ.get("ZIBAL_MERCHANT", "69e3945ee6d570ad00fd0dad")
+ZIBAL_MERCHANT = os.environ.get("ZIBAL_MERCHANT", "zibal")
 
 ZIBAL_BASE_URL = "https://gateway.zibal.ir"
 ZIBAL_REQUEST_URL = f"{ZIBAL_BASE_URL}/v1/request"
@@ -28,28 +28,15 @@ ZIBAL_RESULT_CODES = {
 
 
 def generate_order_id(user_id):
-    """ساخت orderId یکتا"""
     return f"VIOLEX-{user_id}-{int(time.time())}"
 
 
 def create_payment(amount, description, callback_url=None, mobile=None, order_id=None):
-    """
-    ایجاد تراکنش در زیبال
-    
-    Args:
-        amount: مبلغ به تومان
-        description: توضیحات
-        callback_url: آدرس بازگشت (باید HTTPS معتبر باشد)
-        mobile: شماره موبایل
-        order_id: شناسه سفارش یکتا
-    """
     if not ZIBAL_MERCHANT:
         return {"success": False, "error": "مرچنت تنظیم نشده", "code": -1}
 
-    amount_rial = amount * 10  # تبدیل تومان به ریال
+    amount_rial = amount * 10
 
-    # ⚠️ Callback URL باید HTTPS معتبر باشد
-    # از دامنه violexq.ir استفاده می‌کنیم
     if not callback_url:
         callback_url = "https://violexq.ir/payment/callback"
 
@@ -96,7 +83,6 @@ def create_payment(amount, description, callback_url=None, mobile=None, order_id
 
 
 def verify_payment(track_id, amount):
-    """تأیید تراکنش"""
     if not ZIBAL_MERCHANT:
         return {"success": False, "error": "مرچنت تنظیم نشده"}
 
@@ -142,7 +128,6 @@ def verify_payment(track_id, amount):
 
 
 def inquiry_payment(track_id):
-    """استعلام تراکنش"""
     if not ZIBAL_MERCHANT:
         return {"success": False, "error": "مرچنت تنظیم نشده"}
 
