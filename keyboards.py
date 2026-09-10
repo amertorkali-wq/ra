@@ -23,7 +23,7 @@ def get_main_menu_keyboard():
         [KeyboardButton("📚 ارسال سوال", style="primary")],
         [KeyboardButton("💸 افزایش موجودی", style="success"), KeyboardButton("👤 حساب من", style="primary")],
         [KeyboardButton("🤝 دعوت دوستان", style="success"), KeyboardButton("☎️ پشتیبانی", style="primary")],
-        [KeyboardButton("🆘 قوانین", style="primary"), KeyboardButton("📖 راهنما", style="primary")],
+        [KeyboardButton("🆘 قوانین", style="danger"), KeyboardButton("📖 راهنما", style="primary")],
         [KeyboardButton("📋 درباره ما", style="primary")],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -100,17 +100,24 @@ def get_packages_buttons(has_start_package=False):
 
         if pkg['is_start']:
             keyboard.append([InlineKeyboardButton(
-                f"🎁 {pkg['name']}",
+                f"🎁 {pkg['name']} — 3 روزه رایگان",
                 callback_data=f"buy_pkg_{pkg['id']}",
                 style="success"
             )])
         else:
             keyboard.append([InlineKeyboardButton(
-                f"🟡 {pkg['name']} | {pkg['price']:,} تومان | {pkg['questions']} سوال",
+                f"🔸 {pkg['name']} | {pkg['price']:,} تومان | {pkg['questions']} سوال",
                 callback_data=f"buy_pkg_{pkg['id']}",
                 style="primary"
             )])
     keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="back_to_balance", style="danger")])
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_start_package_activated_buttons():
+    keyboard = [
+        [InlineKeyboardButton("🔙 بازگشت به پکیج‌ها", callback_data="back_to_packages", style="danger")],
+    ]
     return InlineKeyboardMarkup(keyboard)
 
 
@@ -119,11 +126,7 @@ def get_cards_for_payment(cards):
     for card in cards:
         masked = f"{card[2][:4]} **** **** {card[2][-4:]}"
         star = "⭐ " if card[6] else ""
-        keyboard.append([InlineKeyboardButton(
-            f"💳 {star}{masked}",
-            callback_data=f"pay_card_{card[0]}",
-            style="success"
-        )])
+        keyboard.append([InlineKeyboardButton(f"💳 {star}{masked}", callback_data=f"pay_card_{card[0]}", style="success")])
     keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="back_to_balance", style="danger")])
     return InlineKeyboardMarkup(keyboard)
 
@@ -246,7 +249,7 @@ def get_admin_panel_keyboard():
         [InlineKeyboardButton("🧑🏻‍💻 مدیریت کادر", callback_data="adm_manage_staff", style="primary")],
         [InlineKeyboardButton("👫 مدیریت کاربران", callback_data="adm_manage_users", style="primary")],
         [InlineKeyboardButton("📊 آمار", callback_data="adm_stats", style="primary")],
-        [InlineKeyboardButton("💸 صورت حساب", callback_data="adm_invoices", style="primary")],
+        [InlineKeyboardButton("💸 صورت حساب", callback_data="adm_invoices", style="success")],
         [InlineKeyboardButton("📣 پیام همگانی", callback_data="adm_broadcast", style="primary")],
         [InlineKeyboardButton("⚙️ تنظیمات ربات", callback_data="adm_settings", style="primary")],
         [InlineKeyboardButton("🎁 هدیه", callback_data="adm_gift", style="success")],

@@ -1,36 +1,74 @@
 """
-اتصال به درگاه پرداخت زرین‌پال
+اتصال به درگاه پرداخت زیبال
+طبق مستندات رسمی: https://gateway.zibal.ir
 """
+import os
 import requests
-from config import ZARINPAL_MERCHANT, ZARINPAL_SANDBOX
+import time
+from config import ZIBAL_SANDBOX
+
+ZIBAL_MERCHANT = os.environ.get("ZIBAL_MERCHANT", "69e3945ee6d570ad00fd0dad")
+
+ZIBAL_BASE_URL = "https://gateway.zibal.ir"
+ZIBAL_REQUEST_URL = f"{ZIBAL_BASE_URL}/v1/request"
+ZIBAL_VERIFY_URL = f"{ZIBAL_BASE_URL}/v1/verify"
+ZIBAL_INQUIRY_URL = f"{ZIBAL_BASE_URL}/v1/inquiry"
+ZIBAL_STARTPAY = f"{ZIBAL_BASE_URL}/start/"
 
 
-if ZARINPAL_SANDBOX:
-    ZARINPAL_REQUEST_URL = "https://sandbox.zarinpal.com/pg/v4/payment/request.json"
-    ZARINPAL_VERIFY_URL = "https://sandbox.zarinpal.com/pg/v4/payment/verify.json"
-    ZARINPAL_STARTPAY = "https://sandbox.zarinpal.com/pg/StartPay/"
-else:
-    ZARINPAL_REQUEST_URL = "https://payment.zarinpal.com/pg/v4/payment/request.json"
-    ZARINPAL_VERIFY_URL = "https://payment.zarinpal.com/pg/v4/payment/verify.json"
-    ZARINPAL_STARTPAY = "https://payment.zarinpal.com/pg/StartPay/"
+# کدهای نتیجه زیبال (طبق مستندات رسمی)
+ZIBAL_RESULT_CODES = {
+    100: "موفق",
+    102: "merchant پیدا نشد",
+    103: "merchant غیرفعال",
+    104: "merchant نامعتبر",
+    105: "amount باید بین 1000 تا 500000000 ریال باشد",
+    106: "callbackUrl نامعتبر است",
+    113: "amount نامعتبر است",
+    114: "mobile نامعتبر است",
+    115: "IP ثبت نشده است",
+    201: "قبلاً تأیید شده",
+    202: "سفارش پرداخت نشده یا ناموفق بوده",
+    203: "trackId نامعتبر است",
+}
 
 
-def create_payment(amount, description, callback_url=None, mobile=None, email=None):
-    """ایجاد تراکنش در زرین‌پال"""
-    amount_rial = amount * 10
+def generate_order_id(user_id):
+    """ساخت orderId یکتا"""
+    return f"VIOLEX-{user_id}-{int(time.time())}"
+
+
+def create_payment(amount, description, callback_url=None, mobile=None, order_id=None):
+    """
+    ایجاد تراکنش در زیبال
+    
+    Args:
+        amount: مبلغ به تومان
+        description: توضیحات
+        callback_url: آدرس بازگشت
+        mobile: شماره موبایل
+        order_id: شناسه سفارش یکتا
+    """
+    if not ZIBAL_MERCHANT or len(ZIBAL_MERCHANT) < 36:
+        return {
+            "success": False,
+            "error": f"کد مرچنت نامعتبر است (طول: {len(ZIBAL_MERCHANT) if ZIBAL_MERCHANT else 0} کاراکتر، حداقل 36 کاراکتر لازم است)",
+            "code": -1,
+        }
+
+    amount_rial = amount * 10  # تبدیل تومان به ریال
 
     payload = {
-        "merchant_id": ZARINPAL_MERCHANT,
+        "merchant": ZIBAL_MERCHANT,
         "amount": amount_rial,
         "description": description,
-        "callback_url": callback_url or "https://t.me/VIOLEXQ_bot",
+        "callbackUrl": callback_url or "https://t.me/VIOLEXQ_bot",
     }
 
     if mobile:
-        payload["metadata"] = {"mobile": mobile}
-    if email:
-        payload["metadata"] = payload.get("metadata", {})
-        payload["metadata"]["email"] = email
+        payload["mobile"] = mobile
+    if order_id:
+        payload["orderId"] = order_id
 
     headers = {
         "Content-Type": "application/json",
@@ -38,44 +76,51 @@ def create_payment(amount, description, callback_url=None, mobile=None, email=No
     }
 
     try:
-        response = requests.post(
-            ZARINPAL_REQUEST_URL,
-            json=payload,
-            headers=headers,
-            timeout=15
-        )
+        response = requests.post(ZIBAL_REQUEST_URL, json=payload, headers=headers, timeout=15)
         result = response.json()
-        print(f"🟢 Zarinpal Request: {result}")
+        print(f"🟢 Zibal Request: {result}")
 
-        if result.get("data") and result["data"].get("code") == 100:
-            authority = result["data"]["authority"]
-            payment_url = f"{ZARINPAL_STARTPAY}{authority}"
+        if result.get("result") == 100:
+            track_id = result.get("trackId")
+            payment_url = f"{ZIBAL_STARTPAY}{track_id}"
             return {
                 "success": True,
-                "authority": authority,
+                "authority": str(track_id),
+                "track_id": track_id,
                 "payment_url": payment_url,
-                "fee": result["data"].get("fee", 0),
+                "order_id": order_id,
             }
         else:
-            error = result.get("errors", {})
+            code = result.get("result")
+            error_msg = result.get("message", ZIBAL_RESULT_CODES.get(code, "خطای نامشخص"))
+            print(f"🔴 Zibal Error Code: {code}, Message: {error_msg}")
             return {
                 "success": False,
-                "error": str(error),
-                "code": error.get("code") if isinstance(error, dict) else None,
+                "error": error_msg,
+                "code": code,
             }
     except Exception as e:
-        print(f"🔴 Zarinpal Error: {e}")
+        print(f"🔴 Zibal Error: {e}")
         return {"success": False, "error": str(e)}
 
 
-def verify_payment(authority, amount):
-    """تأیید تراکنش"""
+def verify_payment(track_id, amount):
+    """
+    تأیید تراکنش
+    
+    Args:
+        track_id: کد رهگیری (trackId)
+        amount: مبلغ به تومان
+    """
+    if not ZIBAL_MERCHANT:
+        return {"success": False, "error": "مرچنت تنظیم نشده"}
+
     amount_rial = amount * 10
 
     payload = {
-        "merchant_id": ZARINPAL_MERCHANT,
+        "merchant": ZIBAL_MERCHANT,
         "amount": amount_rial,
-        "authority": authority,
+        "trackId": int(track_id),
     }
 
     headers = {
@@ -84,35 +129,57 @@ def verify_payment(authority, amount):
     }
 
     try:
-        response = requests.post(
-            ZARINPAL_VERIFY_URL,
-            json=payload,
-            headers=headers,
-            timeout=15
-        )
+        response = requests.post(ZIBAL_VERIFY_URL, json=payload, headers=headers, timeout=15)
         result = response.json()
-        print(f"🟢 Zarinpal Verify: {result}")
+        print(f"🟢 Zibal Verify: {result}")
 
-        if result.get("data") and result["data"].get("code") == 100:
+        if result.get("result") == 100:
             return {
                 "success": True,
-                "ref_id": result["data"].get("ref_id"),
-                "card_pan": result["data"].get("card_pan", ""),
-                "card_hash": result["data"].get("card_hash", ""),
+                "ref_id": result.get("refNumber", "-"),
+                "card_pan": result.get("cardNumber", "-"),
+                "amount": result.get("amount", amount_rial),
             }
-        elif result.get("data") and result["data"].get("code") == 101:
+        elif result.get("result") == 201:
             return {
                 "success": True,
-                "ref_id": result["data"].get("ref_id"),
                 "already_verified": True,
+                "ref_id": result.get("refNumber", "-"),
+                "card_pan": result.get("cardNumber", "-"),
             }
         else:
-            error = result.get("errors", {})
+            code = result.get("result")
+            error_msg = result.get("message", ZIBAL_RESULT_CODES.get(code, "خطای تأیید"))
             return {
                 "success": False,
-                "error": str(error),
-                "code": error.get("code") if isinstance(error, dict) else None,
+                "error": error_msg,
+                "code": code,
             }
     except Exception as e:
-        print(f"🔴 Zarinpal Verify Error: {e}")
+        print(f"🔴 Zibal Verify Error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+def inquiry_payment(track_id):
+    """استعلام تراکنش"""
+    if not ZIBAL_MERCHANT:
+        return {"success": False, "error": "مرچنت تنظیم نشده"}
+
+    payload = {
+        "merchant": ZIBAL_MERCHANT,
+        "trackId": int(track_id),
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+    try:
+        response = requests.post(ZIBAL_INQUIRY_URL, json=payload, headers=headers, timeout=15)
+        result = response.json()
+        print(f"🟢 Zibal Inquiry: {result}")
+        return result
+    except Exception as e:
+        print(f"🔴 Zibal Inquiry Error: {e}")
         return {"success": False, "error": str(e)}
