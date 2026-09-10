@@ -30,12 +30,14 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print(f"Teacher error: {e}")
 
+    # بررسی پشتیبانی (با ریپلای)
     if context.user_data.get('active_ticket_id'):
         user_id = update.effective_user.id
         if support_panel.is_support(user_id):
-            await support_panel.support_send_reply(update, context)
-            return
+            if await support_panel.support_send_reply(update, context):
+                return
 
+    # بررسی دبیران (در حال پاسخ)
     if context.user_data.get('active_question_id'):
         user_id = update.effective_user.id
         if teacher_panel.is_teacher(user_id):
@@ -46,6 +48,13 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def photo_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # بررسی پشتیبانی (با ریپلای برای عکس)
+    if context.user_data.get('active_ticket_id'):
+        user_id = update.effective_user.id
+        if support_panel.is_support(user_id):
+            if await support_panel.support_send_reply(update, context):
+                return
+
     if context.user_data.get('active_question_id'):
         user_id = update.effective_user.id
         if teacher_panel.is_teacher(user_id):

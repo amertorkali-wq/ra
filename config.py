@@ -8,7 +8,7 @@ TOKEN = "8762301184:AAGbn9CZirNf7Yc9nRdnBpQMfFGEnu8r9wA"
 CHANNEL_ID = -1003858232624
 CHANNEL_LINK = "https://t.me/violex_official"
 
-# لینک ربات تلگرام برای دعوت
+# لینک ربات تلگرام
 BOT_LINK = "https://t.me/VIOLEXQ_bot?start="
 
 # لینک عکس درباره ما
@@ -32,16 +32,14 @@ TRANSACTION_CHANNEL = -1004348903892
 # گروه حسابداری
 ACCOUNTING_GROUP = -1003780590510
 
-# هدیه دعوت (تومان)
+# هدیه دعوت
 INVITE_REWARD = 4000
-
-# هدیه دعوت (سوال)
 INVITE_REWARD_QUESTIONS = 3
 
-# ---------- تنظیمات SMS.ir ----------
+# تنظیمات SMS.ir
 SMSIR_API_KEY = "B33h8avj7PGBquAGfOXPLOw7LKYnmJNBXIN9XuxJLrfK0ojd"
 SMSIR_TEMPLATE_ID = 851846
-SMSIR_LINE_NUMBER = "30004505000017"  # ← از پنل SMS.ir خود جایگزین کنید
+SMSIR_LINE_NUMBER = "30004505000017"
 
 # درگاه پرداخت
 ZARINPAL_MERCHANT = None

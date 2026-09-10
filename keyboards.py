@@ -39,6 +39,12 @@ def get_cancel_question_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
+def get_phone_share_keyboard():
+    """دکمه اشتراک‌گذاری شماره - فقط همین یک دکمه"""
+    keyboard = [[KeyboardButton("📱 اشتراک‌گذاری شماره من", request_contact=True)]]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+
+
 def get_balance_buttons():
     keyboard = [
         [InlineKeyboardButton("احراز هویت 🪪", callback_data="auth")],
@@ -114,6 +120,10 @@ def get_invoice_buttons(use_wallet=False):
     return InlineKeyboardMarkup(keyboard)
 
 
+# ============================================
+# دکمه‌های گروه دبیران (فقط شیشه‌ای)
+# ============================================
+
 def get_teacher_question_buttons(question_id):
     keyboard = [
         [InlineKeyboardButton("پاسخ دادن ✅", callback_data=f"t_answer_{question_id}")],
@@ -135,6 +145,10 @@ def get_student_answer_buttons(question_id):
     return InlineKeyboardMarkup(keyboard)
 
 
+# ============================================
+# دکمه‌های تیکت پشتیبانی (فقط شیشه‌ای)
+# ============================================
+
 def get_support_ticket_buttons(ticket_id):
     keyboard = [
         [InlineKeyboardButton("پاسخ دادن ✅", callback_data=f"sup_answer_{ticket_id}")],
@@ -142,6 +156,15 @@ def get_support_ticket_buttons(ticket_id):
     ]
     return InlineKeyboardMarkup(keyboard)
 
+
+def get_support_close_button(ticket_id):
+    keyboard = [[InlineKeyboardButton("بستن ❌", callback_data=f"sup_close_{ticket_id}")]]
+    return InlineKeyboardMarkup(keyboard)
+
+
+# ============================================
+# حسابداری
+# ============================================
 
 def get_card_verify_buttons(card_id):
     keyboard = [
@@ -158,6 +181,10 @@ def get_transaction_buttons(transaction_id):
     ]
     return InlineKeyboardMarkup(keyboard)
 
+
+# ============================================
+# پنل مدیریت
+# ============================================
 
 def get_admin_panel_keyboard():
     keyboard = [
