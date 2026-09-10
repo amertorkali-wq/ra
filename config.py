@@ -13,8 +13,9 @@ CHANNEL_LINK = "https://t.me/violex_official"
 BOT_LINK = "https://ble.ir/VIOLEXQ_BOT?start="
 
 # ---------- لینک عکس درباره ما ----------
-# بعداً این لینک را با عکس واقعی جایگزین کنید
-ABOUT_IMAGE_URL = "https://your-image-link.com/violex-about.jpg"
+# اگر می‌خواهید عکس داشته باشید، لینک واقعی عکس را اینجا بگذارید
+# اگر نمی‌خواهید، مقدار None را نگه دارید
+ABOUT_IMAGE_URL = None
 
 # ---------- آیدی مالک اصلی ----------
 OWNER_ID = 7803165903
