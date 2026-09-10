@@ -112,6 +112,7 @@ def clear_user_states(context):
         'awaiting_card_photo', 'awaiting_card_number',
         'awaiting_question', 'awaiting_description',
         'awaiting_question_count', 'awaiting_support',
+        'awaiting_support_message', 'support_message',
         'in_ticket', 'card_photo', 'selected_subject',
         'question_text', 'question_file', 'selected_package',
         'selected_card_id', 'payment_authority', 'payment_amount',
@@ -791,11 +792,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "👤 حساب من", "🤝 دعوت دوستان", "📋 درباره ما",
         "☎️ پشتیبانی", "🆘 قوانین", "📖 راهنما",
         "📚 ارسال سوال", "💸 افزایش موجودی",
-        "🔙 برگشت", "❌ لغو سوال", "❌ لغو تیکت"
+        "🔙 برگشت", "❌ لغو سوال", "❌ لغو تیکت",
+        "📫 ارسال تیکت"
     ]
 
     if text in main_menu_buttons:
-        clear_user_states(context)
+        # فقط حالت‌های مربوطه رو پاک کن، نه awaiting_support_message
+        if text not in ["📫 ارسال تیکت", "❌ لغو تیکت"]:
+            clear_user_states(context)
 
     user_info = get_user_info(user_id)
 
@@ -983,6 +987,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown"
             )
 
+    elif text == "📖 راهنما":
+        await update.message.reply_text(
+            HELP_TEXT,
+            reply_markup=get_main_menu_keyboard()
+        )
+
+    elif text == "🆘 قوانین":
+        await update.message.reply_text(
+            RULES_TEXT,
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode="Markdown"
+        )
+
     elif text == "☎️ پشتیبانی":
         open_ticket = get_user_open_ticket(user_id)
         if open_ticket:
@@ -1001,18 +1018,80 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown"
             )
         else:
-            context.user_data['awaiting_support'] = True
+            context.user_data['awaiting_support_message'] = True
+            context.user_data.pop('support_message', None)
             await update.message.reply_text(
                 SUPPORT_TEXT,
                 reply_markup=get_cancel_ticket_keyboard(),
                 parse_mode="Markdown"
             )
 
-    elif text == "🆘 قوانین":
-        await update.message.reply_text(RULES_TEXT, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
+    elif text == "📫 ارسال تیکت":
+        if context.user_data.get('awaiting_support_message'):
+            user_message = context.user_data.get('support_message', '')
+            if not user_message:
+                await update.message.reply_text(
+                    "⚠️ *لطفاً اول پیام خود را ارسال کنید.*",
+                    parse_mode="Markdown",
+                    reply_markup=get_cancel_ticket_keyboard()
+                )
+                return
 
-    elif text == "📖 راهنما":
-        await update.message.reply_text(HELP_TEXT, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
+            context.user_data['awaiting_support_message'] = False
+            context.user_data.pop('support_message', None)
+            ticket_id, ticket_code = create_ticket(user_id, user_message)
+
+            try:
+                await context.bot.send_message(
+                    chat_id=SUPPORT_GROUP,
+                    text=(
+                        f"📩 *درخواست جدید پشتیبانی*\n\n"
+                        f"🆔 کد پیگیری: `{ticket_code}`\n"
+                        f"👤 کاربر: @{user.username or 'ندارد'}\n"
+                        f"🆔 ID: `{user_id}`\n"
+                        f"📱 شماره: `{user_info.get('phone', 'نامشخص')}`\n"
+                        f"🕐 زمان: {get_shamsi_now()}\n\n"
+                        f"📝 *پیام کاربر:*\n{user_message}"
+                    ),
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup([
+                        [
+                            InlineKeyboardButton("✅ پاسخ دادن", callback_data=f"sup_answer_{ticket_id}", style="success"),
+                            InlineKeyboardButton("❌ بستن", callback_data=f"sup_close_{ticket_id}", style="danger"),
+                        ]
+                    ])
+                )
+            except Exception as e:
+                print(f"Error sending to support: {e}")
+
+            await update.message.reply_text(
+                SUPPORT_TICKET_CREATED.format(ticket_code=ticket_code),
+                reply_markup=get_main_menu_keyboard(),
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                "⚠️ *لطفاً ابتدا از منوی «پشتیبانی» اقدام کنید.*",
+                reply_markup=get_main_menu_keyboard()
+            )
+
+    elif text == "❌ لغو تیکت":
+        context.user_data['awaiting_support_message'] = False
+        context.user_data.pop('support_message', None)
+        await update.message.reply_text(
+            MAIN_MENU_TEXT,
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode="Markdown"
+        )
+
+    elif context.user_data.get('awaiting_support_message'):
+        context.user_data['support_message'] = text
+        await update.message.reply_text(
+            "✅ *پیام شما دریافت شد.*\n\n"
+            "👇 حالا روی دکمه «📫 ارسال تیکت» بزنید تا برای پشتیبانی ارسال شود.",
+            reply_markup=get_cancel_ticket_keyboard(),
+            parse_mode="Markdown"
+        )
 
     elif text == "📚 ارسال سوال":
         if not user_info['active_package'] or user_info['active_package'] == '0':
@@ -1057,45 +1136,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "❌ لغو سوال":
         clear_user_states(context)
-        await update.message.reply_text("❌ *سوال لغو شد.*", reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
-
-    elif text == "❌ لغو تیکت":
-        clear_user_states(context)
-        await update.message.reply_text("❌ *تیکت لغو شد.*", reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
+        await update.message.reply_text(
+            "❌ *سوال لغو شد.*",
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode="Markdown"
+        )
 
     elif text == "🔙 برگشت":
         clear_user_states(context)
-        await update.message.reply_text(MAIN_MENU_TEXT, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
-
-    elif context.user_data.get('awaiting_support'):
-        context.user_data['awaiting_support'] = False
-        ticket_id, ticket_code = create_ticket(user_id, text)
-
-        try:
-            await context.bot.send_message(
-                chat_id=SUPPORT_GROUP,
-                text=(
-                    f"📩 *درخواست جدید پشتیبانی*\n\n"
-                    f"🆔 کد پیگیری: `{ticket_code}`\n"
-                    f"👤 کاربر: @{user.username or 'ندارد'}\n"
-                    f"🆔 ID: `{user_id}`\n"
-                    f"📱 شماره: `{user_info.get('phone', 'نامشخص')}`\n"
-                    f"🕐 زمان: {get_shamsi_now()}\n\n"
-                    f"📝 *پیام کاربر:*\n{text}"
-                ),
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup([
-                    [
-                        InlineKeyboardButton("✅ پاسخ دادن", callback_data=f"sup_answer_{ticket_id}", style="success"),
-                        InlineKeyboardButton("❌ بستن", callback_data=f"sup_close_{ticket_id}", style="danger"),
-                    ]
-                ])
-            )
-        except Exception as e:
-            print(f"Error sending to support: {e}")
-
         await update.message.reply_text(
-            SUPPORT_TICKET_CREATED.format(ticket_code=ticket_code),
+            MAIN_MENU_TEXT,
             reply_markup=get_main_menu_keyboard(),
             parse_mode="Markdown"
         )

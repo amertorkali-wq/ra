@@ -54,7 +54,10 @@ def get_phone_share_keyboard():
 
 
 def get_cancel_ticket_keyboard():
-    keyboard = [[KeyboardButton("❌ لغو تیکت", style="danger")]]
+    keyboard = [
+        [KeyboardButton("📫 ارسال تیکت", style="success")],
+        [KeyboardButton("❌ لغو تیکت", style="danger")],
+    ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
