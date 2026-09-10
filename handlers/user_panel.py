@@ -1,0 +1,782 @@
+from datetime import datetime, timedelta
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes
+
+from config import (
+    CHANNEL_ID, BOT_LINK, DEFAULT_PACKAGES,
+    SUBJECTS, ABOUT_IMAGE_URL, ACCOUNTING_GROUP, SUPPORT_GROUP
+)
+from database import (
+    get_user, create_user, update_user, get_user_cards, get_verified_cards,
+    add_card, delete_card, create_question, create_ticket, add_transaction
+)
+from keyboards import (
+    get_force_buttons, get_main_menu_keyboard, get_lesson_keyboard,
+    get_balance_buttons, get_auth_buttons, get_about_buttons,
+    get_packages_buttons, get_cards_for_payment, get_invoice_buttons,
+    get_back_keyboard, get_cancel_question_keyboard
+)
+from texts import (
+    FORCE_MSG, NOT_MEMBER_MSG, WELCOME_MSG, MAIN_MENU_TEXT,
+    INCREASE_BALANCE_TEXT, AUTH_TEXT, ABOUT_US_TEXT, PACKAGES_TEXT,
+    BUY_QUESTION_TEXT, NO_PACKAGE_MSG, NO_QUESTION_MSG, SUPPORT_TEXT,
+    INVITE_TEXT_1, INVITE_TEXT_2, RULES_TEXT, HELP_TEXT,
+    ADD_CARD_TEXT, CARD_NUMBER_REQUEST, CARD_REGISTERED,
+    ASK_SUBJECT_TEXT, ASK_QUESTION_TEXT, ASK_DESCRIPTION_TEXT,
+    QUESTION_REGISTERED, CANCEL_QUESTION, get_account_text
+)
+
+
+# ============================================
+# بررسی عضویت کاربر
+# ============================================
+
+async def is_user_member(application, user_id: int) -> bool:
+    try:
+        member = await application.bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
+        return member.status in ["member", "administrator", "creator"]
+    except Exception as e:
+        print(f"Error checking membership: {e}")
+        return False
+
+
+def get_user_info(user_id):
+    user = get_user(user_id)
+    if not user:
+        return None
+    return {
+        'user_id': user[0],
+        'username': user[1],
+        'first_name': user[2],
+        'last_name': user[3],
+        'phone': user[4],
+        'wallet': user[5],
+        'questions_remaining': user[6],
+        'questions_used': user[7],
+        'active_package': user[8],
+        'package_expire_date': user[9],
+        'referrals': user[10],
+        'invited_by': user[11],
+        'has_start_package': user[12],
+        'is_blocked': user[13],
+        'role': user[14],
+    }
+
+
+# ============================================
+# دستور /start
+# ============================================
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    user_id = user.id
+
+    # بررسی لینک دعوت
+    invited_by = None
+    if context.args and len(context.args) > 0:
+        try:
+            invited_by = int(context.args[0])
+            if invited_by == user_id:
+                invited_by = None
+        except:
+            pass
+
+    # ساخت کاربر اگر وجود ندارد
+    if not get_user(user_id):
+        create_user(user_id, user.username, user.first_name, user.last_name, invited_by)
+
+    # بررسی عضویت
+    if await is_user_member(context.application, user_id):
+        await update.message.reply_text(
+            WELCOME_MSG,
+            reply_markup=get_main_menu_keyboard()
+        )
+    else:
+        await update.message.reply_text(
+            FORCE_MSG,
+            reply_markup=get_force_buttons(),
+            disable_web_page_preview=True,
+        )
+
+
+# ============================================
+# بررسی عضویت (دکمه)
+# ============================================
+
+async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    user_id = query.from_user.id
+    message = query.message
+
+    if await is_user_member(context.application, user_id):
+        try:
+            await message.delete()
+        except:
+            pass
+        await query.message.reply_text(
+            WELCOME_MSG,
+            reply_markup=get_main_menu_keyboard()
+        )
+    else:
+        await query.edit_message_text(
+            NOT_MEMBER_MSG,
+            reply_markup=get_force_buttons(),
+            disable_web_page_preview=True,
+        )
+
+
+# ============================================
+# دکمه‌های افزایش موجودی
+# ============================================
+
+async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    user_id = query.from_user.id
+    user_info = get_user_info(user_id)
+
+    # ---- احراز هویت ----
+    if data == "auth":
+        await query.edit_message_text(
+            AUTH_TEXT,
+            reply_markup=get_auth_buttons(),
+            parse_mode="Markdown"
+        )
+
+    # ---- خرید پکیج ----
+    elif data == "buy_package":
+        cards = get_verified_cards(user_id)
+        if not cards:
+            await query.edit_message_text(
+                "❗ شما هنوز کارت بانکی فعالی ثبت نکرده‌اید. لطفاً از بخش «احراز هویت» برای افزودن کارت اقدام کنید.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("احراز هویت 🪪", callback_data="auth")]
+                ])
+            )
+        else:
+            await query.edit_message_text(
+                PACKAGES_TEXT,
+                reply_markup=get_packages_buttons(),
+                parse_mode="Markdown"
+            )
+
+    # ---- خرید سوال ----
+    elif data == "buy_question":
+        await query.edit_message_text(
+            BUY_QUESTION_TEXT,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 برگشت", callback_data="back_to_balance")]
+            ])
+        )
+        context.user_data['awaiting_question_count'] = True
+
+    # ---- بازگشت به منوی اصلی ----
+    elif data == "back_to_main":
+        try:
+            await query.message.delete()
+        except:
+            pass
+        await query.message.reply_text(
+            MAIN_MENU_TEXT,
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode="Markdown"
+        )
+
+    # ---- بازگشت به منوی افزایش موجودی ----
+    elif data == "back_to_balance":
+        await query.edit_message_text(
+            INCREASE_BALANCE_TEXT,
+            reply_markup=get_balance_buttons()
+        )
+
+    # ---- انتخاب پکیج ----
+    elif data.startswith("buy_pkg_"):
+        pkg_id = int(data.split("_")[2])
+        pkg = next((p for p in DEFAULT_PACKAGES if p['id'] == pkg_id), None)
+
+        if not pkg:
+            await query.edit_message_text("⚠️ پکیج یافت نشد.")
+            return
+
+        # پکیج استارت
+        if pkg['is_start']:
+            if user_info['has_start_package']:
+                await query.edit_message_text(
+                    "⚠️ شما قبلاً پکیج استارت را استفاده کرده‌اید.",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔙 برگشت", callback_data="back_to_balance")]
+                    ])
+                )
+                return
+
+            expire_date = (datetime.now() + timedelta(days=pkg['days'])).strftime("%Y/%m/%d")
+            update_user(
+                user_id,
+                active_package=pkg['name'],
+                package_expire_date=expire_date,
+                questions_remaining=user_info['questions_remaining'] + pkg['questions'],
+                has_start_package=1
+            )
+            await query.edit_message_text(
+                f"🎉 پکیج استارت برای شما فعال شد!\n\n"
+                f"📦 پکیج: {pkg['name']}\n"
+                f"❓ تعداد سوال: {pkg['questions']}\n"
+                f"⏳ اعتبار تا: {expire_date}"
+            )
+            return
+
+        cards = get_verified_cards(user_id)
+        if not cards:
+            await query.edit_message_text(
+                "❗ شما کارت تایید شده ندارید. ابتدا احراز هویت کنید.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("احراز هویت 🪪", callback_data="auth")]
+                ])
+            )
+            return
+
+        context.user_data['selected_package'] = pkg
+
+        text = (
+            f"💳 لطفاً کارت بانکی که قصد پرداخت با آن را دارید انتخاب کنید.\n\n"
+            f"📦 پکیج انتخابی: {pkg['name']}\n"
+            f"💰 مبلغ: {pkg['price']:,} تومان\n"
+            f"❓ تعداد سوال: {pkg['questions']}"
+        )
+        await query.edit_message_text(
+            text,
+            reply_markup=get_cards_for_payment(cards)
+        )
+
+    # ---- انتخاب کارت برای پرداخت ----
+    elif data.startswith("pay_card_"):
+        card_id = int(data.split("_")[2])
+        pkg = context.user_data.get('selected_package')
+
+        if not pkg:
+            await query.edit_message_text("⚠️ خطا! لطفاً دوباره تلاش کنید.")
+            return
+
+        wallet = user_info['wallet']
+        total_price = pkg['price']
+
+        context.user_data['selected_card_id'] = card_id
+
+        if wallet >= total_price and total_price > 0:
+            await query.edit_message_text(
+                f"🧾 فاکتور شما ایجاد شد\n\n"
+                f"📦 نوع پکیج: {pkg['name']}\n"
+                f"❓ تعداد سوال: {pkg['questions']}\n\n"
+                f"💰 مبلغ فاکتور: {total_price:,} تومان\n\n"
+                f"💳 موجودی کیف پول: {wallet:,} تومان\n\n"
+                f"✅ کیف پول شما کافی است. لطفاً روش پرداخت را انتخاب کنید:",
+                reply_markup=get_invoice_buttons(use_wallet=True)
+            )
+        else:
+            remaining = total_price - wallet if total_price > 0 else 0
+            await query.edit_message_text(
+                f"🧾 فاکتور شما ایجاد شد\n\n"
+                f"📦 نوع پکیج: {pkg['name']}\n"
+                f"❓ تعداد سوال: {pkg['questions']}\n\n"
+                f"💰 مبلغ فاکتور: {total_price:,} تومان\n\n"
+                f"💳 موجودی کیف پول: {wallet:,} تومان\n"
+                f"➖ کسر از کیف پول: {wallet:,} تومان\n\n"
+                f"✅ مبلغ قابل پرداخت: {remaining:,} تومان",
+                reply_markup=get_invoice_buttons(use_wallet=False)
+            )
+
+    # ---- پرداخت با کیف پول ----
+    elif data == "pay_wallet":
+        pkg = context.user_data.get('selected_package')
+        if pkg:
+            new_wallet = user_info['wallet'] - pkg['price']
+            new_questions = user_info['questions_remaining'] + pkg['questions']
+            expire_date = (datetime.now() + timedelta(days=pkg['days'])).strftime("%Y/%m/%d")
+
+            update_user(
+                user_id,
+                wallet=new_wallet,
+                questions_remaining=new_questions,
+                active_package=pkg['name'],
+                package_expire_date=expire_date
+            )
+
+            add_transaction(user_id, pkg['price'], "wallet", "-", "success", "package")
+
+            await query.edit_message_text(
+                f"✅ پرداخت با کیف پول انجام شد.\n\n"
+                f"📦 سفارش شما با موفقیت ثبت شد.\n\n"
+                f"🎁 پکیج فعال: {pkg['name']}\n"
+                f"📚 سوالات اضافه شده: {pkg['questions']}\n"
+                f"⏳ اعتبار تا: {expire_date}"
+            )
+
+    # ---- پرداخت از درگاه ----
+    elif data == "pay_gateway":
+        await query.edit_message_text(
+            "🔗 در حال انتقال به درگاه پرداخت...\n\n"
+            "⚠️ درگاه زرین‌پال هنوز متصل نشده است.\n"
+            "لطفاً با پشتیبانی تماس بگیرید.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("☎️ پشتیبانی", url="https://t.me/support_violex")],
+                [InlineKeyboardButton("🔙 برگشت", callback_data="back_to_balance")]
+            ])
+        )
+
+    # ---- پرداخت کردم ----
+    elif data == "paid_check":
+        await query.edit_message_text(
+            "⏳ در حال بررسی پرداخت...\n\n"
+            "⚠️ درگاه زرین‌پال هنوز متصل نشده است.\n"
+            "لطفاً با پشتیبانی تماس بگیرید.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("☎️ پشتیبانی", url="https://t.me/support_violex")]
+            ])
+        )
+
+
+# ============================================
+# دکمه‌های احراز هویت
+# ============================================
+
+async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    user_id = query.from_user.id
+
+    # ---- لیست کارت‌ها ----
+    if data == "card_list":
+        cards = get_user_cards(user_id)
+        if cards:
+            text = "🧾 لیست کارت‌های شما:\n\n"
+            for i, card in enumerate(cards):
+                masked = f"{card[2][:4]} **** **** {card[2][-4:]}"
+                status = "✅ تایید شده" if card[5] else "⏳ در انتظار تایید"
+                text += f"{i+1}️⃣ {masked}\n   وضعیت: {status}\n"
+        else:
+            text = "🧾 شما هیچ کارتی ثبت نکرده‌اید."
+        await query.edit_message_text(text, reply_markup=get_auth_buttons())
+
+    # ---- افزودن کارت ----
+    elif data == "add_card":
+        await query.edit_message_text(
+            ADD_CARD_TEXT,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 برگشت", callback_data="auth")]
+            ])
+        )
+        context.user_data['awaiting_card_photo'] = True
+
+    # ---- حذف کارت ----
+    elif data == "remove_card":
+        cards = get_user_cards(user_id)
+        if not cards:
+            await query.edit_message_text(
+                "⚠️ شما هیچ کارتی برای حذف ندارید.",
+                reply_markup=get_auth_buttons()
+            )
+        else:
+            keyboard = []
+            for card in cards:
+                masked = f"****{card[2][-4:]}"
+                keyboard.append([InlineKeyboardButton(f"🗑 {masked}", callback_data=f"del_card_{card[0]}")])
+            keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="auth")])
+            await query.edit_message_text(
+                "🗑 کارت مورد نظر برای حذف را انتخاب کنید:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+
+    # ---- حذف کارت تأیید ----
+    elif data.startswith("del_card_"):
+        card_id = int(data.split("_")[2])
+        delete_card(card_id)
+        await query.edit_message_text(
+            "✅ کارت با موفقیت حذف شد.",
+            reply_markup=get_auth_buttons()
+        )
+
+    # ---- بازگشت به احراز هویت ----
+    elif data == "auth":
+        await query.edit_message_text(
+            AUTH_TEXT,
+            reply_markup=get_auth_buttons(),
+            parse_mode="Markdown"
+        )
+
+    # ---- بازگشت به منوی اصلی ----
+    elif data == "back_to_main":
+        try:
+            await query.message.delete()
+        except:
+            pass
+        await query.message.reply_text(
+            MAIN_MENU_TEXT,
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode="Markdown"
+        )
+
+
+# ============================================
+# دکمه‌های درباره ما
+# ============================================
+
+async def handle_about_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    # فعلاً هیچ کاری نمی‌کند
+
+
+# ============================================
+# دریافت شماره تلفن
+# ============================================
+
+async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    contact = update.message.contact
+    if contact:
+        user_id = update.effective_user.id
+        update_user(user_id, phone=contact.phone_number)
+        await update.message.reply_text(
+            "✅ شماره شما با موفقیت ثبت شد.\n\n"
+            "📨 لطفاً کد تأیید ارسال‌شده را وارد کنید."
+        )
+
+
+# ============================================
+# هندلر عکس
+# ============================================
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+
+    # عکس کارت
+    if context.user_data.get('awaiting_card_photo'):
+        context.user_data['card_photo'] = update.message.photo[-1].file_id
+        context.user_data['awaiting_card_photo'] = False
+        context.user_data['awaiting_card_number'] = True
+        await update.message.reply_text(CARD_NUMBER_REQUEST)
+        return
+
+    # عکس سوال
+    if context.user_data.get('awaiting_question'):
+        context.user_data['awaiting_question'] = False
+        context.user_data['question_file'] = update.message.photo[-1].file_id
+        context.user_data['question_text'] = update.message.caption or '[عکس]'
+        context.user_data['awaiting_description'] = True
+        await update.message.reply_text(
+            ASK_DESCRIPTION_TEXT,
+            reply_markup=get_cancel_question_keyboard()
+        )
+        return
+
+
+# ============================================
+# هندلر پیام‌های متنی
+# ============================================
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    text = update.message.text
+    user_id = user.id
+
+    # ---- بررسی عضویت ----
+    if not await is_user_member(context.application, user.id):
+        await update.message.reply_text(
+            "⛔ لطفاً ابتدا در کانال عضو شوید و سپس /start را بزنید.",
+            reply_markup=get_force_buttons()
+        )
+        return
+
+    user_info = get_user_info(user_id)
+
+    # ---- حالت انتظار شماره کارت ----
+    if context.user_data.get('awaiting_card_number'):
+        if text and text.isdigit() and len(text) == 16:
+            card_photo = context.user_data.get('card_photo')
+            card_id = add_card(user_id, text, user.first_name or "کاربر", card_photo)
+            context.user_data['awaiting_card_number'] = False
+            context.user_data.pop('card_photo', None)
+
+            await update.message.reply_text(CARD_REGISTERED)
+
+            # ارسال به گروه حسابداری
+            try:
+                await context.bot.send_photo(
+                    chat_id=ACCOUNTING_GROUP,
+                    photo=card_photo,
+                    caption=(
+                        f"📌 احراز کارت جدید\n\n"
+                        f"👤 کاربر: @{user.username or 'ندارد'}\n"
+                        f"🆔 آیدی: {user_id}\n"
+                        f"💳 شماره کارت: {text}\n"
+                        f"👤 نام: {user.first_name or ''} {user.last_name or ''}"
+                    ),
+                    reply_markup=InlineKeyboardMarkup([
+                        [
+                            InlineKeyboardButton("تایید کارت ✅", callback_data=f"acc_verify_{card_id}"),
+                            InlineKeyboardButton("رد کارت ❌", callback_data=f"acc_reject_{card_id}"),
+                        ]
+                    ])
+                )
+            except Exception as e:
+                print(f"Error sending to accounting: {e}")
+        else:
+            await update.message.reply_text(
+                "⚠️ شماره کارت باید ۱۶ رقم عددی باشد. لطفاً دوباره ارسال کنید."
+            )
+        return
+
+    # ---- حالت انتظار تعداد سوال ----
+    if context.user_data.get('awaiting_question_count'):
+        if text and text.isdigit():
+            count = int(text)
+            if count < 1:
+                await update.message.reply_text("⚠️ تعداد باید حداقل 1 باشد.")
+                return
+
+            price_per = 30000 if count < 15 else 25000
+            total = count * price_per
+
+            context.user_data['awaiting_question_count'] = False
+            context.user_data['question_purchase'] = {'count': count, 'total': total}
+
+            cards = get_verified_cards(user_id)
+            if not cards:
+                await update.message.reply_text(
+                    "❗ شما کارت تایید شده ندارید. ابتدا احراز هویت کنید.",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("احراز هویت 🪪", callback_data="auth")]
+                    ])
+                )
+                return
+
+            await update.message.reply_text(
+                f"🧾 فاکتور خرید سوال\n\n"
+                f"❓ تعداد سوال: {count}\n"
+                f"💰 قیمت هر سوال: {price_per:,} تومان\n"
+                f"💰 مبلغ کل: {total:,} تومان\n\n"
+                f"💳 لطفاً کارت پرداخت را انتخاب کنید:",
+                reply_markup=get_cards_for_payment(cards)
+            )
+        else:
+            await update.message.reply_text("⚠️ لطفاً یک عدد معتبر وارد کنید.")
+        return
+
+    # ============================================
+    # دکمه‌های منوی اصلی
+    # ============================================
+
+    # ---- حساب من ----
+    if text == "👤 حساب من":
+        now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        await update.message.reply_text(
+            get_account_text(user_info, user_id, now),
+            reply_markup=get_main_menu_keyboard()
+        )
+
+    # ---- دعوت دوستان ----
+    elif text == "🤝 دعوت دوستان":
+        referral_link = f"{BOT_LINK}{user_id}"
+        await update.message.reply_text(
+            INVITE_TEXT_1.format(invite_link=referral_link)
+        )
+        await update.message.reply_text(
+            INVITE_TEXT_2,
+            reply_markup=get_main_menu_keyboard()
+        )
+
+    # ---- درباره ما ----
+    elif text == "📋 درباره ما":
+        try:
+            await update.message.reply_photo(
+                photo=ABOUT_IMAGE_URL,
+                caption=ABOUT_US_TEXT,
+                reply_markup=get_about_buttons(),
+                parse_mode="Markdown"
+            )
+        except Exception:
+            await update.message.reply_text(
+                ABOUT_US_TEXT,
+                reply_markup=get_about_buttons(),
+                parse_mode="Markdown"
+            )
+
+    # ---- پشتیبانی ----
+    elif text == "☎️ پشتیبانی":
+        context.user_data['awaiting_support'] = True
+        await update.message.reply_text(
+            SUPPORT_TEXT,
+            reply_markup=get_back_keyboard()
+        )
+
+    # ---- قوانین ----
+    elif text == "🆘 قوانین":
+        await update.message.reply_text(
+            RULES_TEXT,
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode="Markdown"
+        )
+
+    # ---- راهنما ----
+    elif text == "📖 راهنما":
+        await update.message.reply_text(
+            HELP_TEXT,
+            reply_markup=get_main_menu_keyboard()
+        )
+
+    # ---- ارسال سوال ----
+    elif text == "📚 ارسال سوال":
+        if not user_info['active_package'] or user_info['active_package'] == '0':
+            await update.message.reply_text(
+                NO_PACKAGE_MSG,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("خرید پکیج 📦", callback_data="buy_package")]
+                ])
+            )
+        elif user_info['questions_remaining'] <= 0:
+            await update.message.reply_text(
+                NO_QUESTION_MSG,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("خرید سوال ❓", callback_data="buy_question")]
+                ])
+            )
+        else:
+            await update.message.reply_text(
+                ASK_SUBJECT_TEXT,
+                reply_markup=get_lesson_keyboard()
+            )
+
+    # ---- افزایش موجودی ----
+    elif text == "💸 افزایش موجودی":
+        await update.message.reply_text(
+            INCREASE_BALANCE_TEXT,
+            reply_markup=get_balance_buttons()
+        )
+
+    # ---- انتخاب درس ----
+    elif text in ["🧬 زیست", "🧪 شیمی", "⚡️ فیزیک", "📐 ریاضی"]:
+        if not user_info['active_package'] or user_info['active_package'] == '0':
+            await update.message.reply_text(NO_PACKAGE_MSG)
+        elif user_info['questions_remaining'] <= 0:
+            await update.message.reply_text(NO_QUESTION_MSG)
+        else:
+            subject_name = text.split(" ")[1] if " " in text else text
+            context.user_data['selected_subject'] = subject_name
+            context.user_data['awaiting_question'] = True
+            await update.message.reply_text(
+                ASK_QUESTION_TEXT,
+                reply_markup=get_cancel_question_keyboard()
+            )
+
+    # ---- لغو سوال ----
+    elif text == "❌ لغو سوال":
+        context.user_data.clear()
+        await update.message.reply_text(
+            CANCEL_QUESTION,
+            reply_markup=get_main_menu_keyboard()
+        )
+
+    # ---- برگشت ----
+    elif text == "🔙 برگشت":
+        context.user_data.clear()
+        await update.message.reply_text(
+            MAIN_MENU_TEXT,
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode="Markdown"
+        )
+
+    # ---- پاسخ پشتیبانی ----
+    elif context.user_data.get('awaiting_support'):
+        context.user_data['awaiting_support'] = False
+        ticket_id, ticket_code = create_ticket(user_id, text)
+
+        try:
+            await context.bot.send_message(
+                chat_id=SUPPORT_GROUP,
+                text=(
+                    f"📩 درخواست جدید پشتیبانی\n\n"
+                    f"🆔 کد پیگیری: {ticket_code}\n"
+                    f"👤 کاربر: @{user.username or 'ندارد'}\n"
+                    f"🆔 ID: {user_id}\n\n"
+                    f"📝 پیام کاربر:\n{text}"
+                ),
+                reply_markup=InlineKeyboardMarkup([
+                    [
+                        InlineKeyboardButton("پاسخ دادن ✅", callback_data=f"sup_answer_{ticket_id}"),
+                        InlineKeyboardButton("بستن ❌", callback_data=f"sup_close_{ticket_id}"),
+                    ]
+                ])
+            )
+        except Exception as e:
+            print(f"Error sending to support: {e}")
+
+        await update.message.reply_text(
+            f"✅ پیام شما با موفقیت ثبت شد.\n\n"
+            f"🆔 کد پیگیری: {ticket_code}\n\n"
+            f"تیم پشتیبانی به زودی پیام شما را بررسی می‌کند و پاسخ از طریق همین ربات ارسال خواهد شد.",
+            reply_markup=get_main_menu_keyboard()
+        )
+
+    # ---- توضیح مشکل سوال ----
+    elif context.user_data.get('awaiting_description'):
+        context.user_data['awaiting_description'] = False
+        subject = context.user_data.get('selected_subject', 'زیست')
+        question_text = context.user_data.get('question_text', '')
+
+        question_id, code = create_question(
+            user_id, subject, question_text, text,
+            context.user_data.get('question_file')
+        )
+
+        new_remaining = user_info['questions_remaining'] - 1
+        new_used = user_info['questions_used'] + 1
+        update_user(user_id, questions_remaining=new_remaining, questions_used=new_used)
+
+        await update.message.reply_text(
+            QUESTION_REGISTERED.format(code=code),
+            reply_markup=get_main_menu_keyboard()
+        )
+
+        # ارسال به گروه دبیران
+        subject_info = SUBJECTS.get(subject)
+        if subject_info:
+            try:
+                await context.bot.send_message(
+                    chat_id=subject_info['group'],
+                    text=(
+                        f"📚 درس: {subject}\n"
+                        f"👤 دانش‌آموز: @{user.username or 'ندارد'}\n"
+                        f"🆔 کد سوال: {code}\n"
+                        f"📝 توضیح دانش‌آموز:\n{text}"
+                    ),
+                    reply_markup=InlineKeyboardMarkup([
+                        [
+                            InlineKeyboardButton("پاسخ دادن ✅", callback_data=f"t_answer_{question_id}"),
+                            InlineKeyboardButton("بستن ❌", callback_data=f"t_close_{question_id}"),
+                        ]
+                    ])
+                )
+            except Exception as e:
+                print(f"Error sending to teachers: {e}")
+
+        context.user_data.clear()
+
+    # ---- دریافت سوال (متن) ----
+    elif context.user_data.get('awaiting_question'):
+        context.user_data['awaiting_question'] = False
+        context.user_data['question_text'] = text
+        context.user_data['awaiting_description'] = True
+        await update.message.reply_text(
+            ASK_DESCRIPTION_TEXT,
+            reply_markup=get_cancel_question_keyboard()
+        )
+
+    # ---- پیام پیش‌فرض ----
+    else:
+        await update.message.reply_text(
+            "⚠️ لطفاً از گزینه‌های منو استفاده کنید.",
+            reply_markup=get_main_menu_keyboard()
+        )

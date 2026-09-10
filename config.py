@@ -2,44 +2,45 @@
 # تنظیمات ربات VIOLEX
 # ============================================
 
-# توکن ربات
+# ---------- توکن ربات ----------
 TOKEN = "8762301184:AAGbn9CZirNf7Yc9nRdnBpQMfFGEnu8r9wA"
 
-# کانال جوین اجباری
+# ---------- کانال جوین اجباری ----------
 CHANNEL_ID = -1003858232624
 CHANNEL_LINK = "https://t.me/violex_official"
 
-# لینک ربات برای دعوت
+# ---------- لینک ربات برای دعوت ----------
 BOT_LINK = "https://ble.ir/VIOLEXQ_BOT?start="
 
-# لینک عکس درباره ما
+# ---------- لینک عکس درباره ما ----------
+# بعداً این لینک را با عکس واقعی جایگزین کنید
 ABOUT_IMAGE_URL = "https://your-image-link.com/violex-about.jpg"
 
-# آیدی مالک اصلی
+# ---------- آیدی مالک اصلی ----------
 OWNER_ID = 7803165903
 
-# گروه دبیران
+# ---------- گروه دبیران ----------
 TEACHERS_GROUP_BIO = -1004360248131
 TEACHERS_GROUP_CHEM = -1003961456151
 TEACHERS_GROUP_PHYS = -1003554950675
 TEACHERS_GROUP_MATH = -1004117472263
 
-# گروه پشتیبانی
+# ---------- گروه پشتیبانی ----------
 SUPPORT_GROUP = -1003780590510
 
-# کانال گزارش تراکنش‌ها
+# ---------- کانال گزارش تراکنش‌ها ----------
 TRANSACTION_CHANNEL = -1004348903892
 
-# گروه حسابداری (فعلاً = گروه پشتیبانی)
+# ---------- گروه حسابداری ----------
 ACCOUNTING_GROUP = -1003780590510
 
-# هدیه دعوت (تومان)
+# ---------- هدیه دعوت (تومان) ----------
 INVITE_REWARD = 4000
 
-# درگاه پرداخت
+# ---------- درگاه پرداخت ----------
 ZARINPAL_MERCHANT = None  # فعلاً ندارد
 
-# پکیج‌ها
+# ---------- پکیج‌ها ----------
 DEFAULT_PACKAGES = [
     {"id": 0, "name": "پکیج استارت", "price": 0, "days": 3, "questions": 4, "is_start": True},
     {"id": 1, "name": "پکیج 1 ماهه", "price": 250000, "days": 30, "questions": 10, "is_start": False},
@@ -50,7 +51,7 @@ DEFAULT_PACKAGES = [
     {"id": 6, "name": "پکیج 6 ماهه + 7 سوال هدیه", "price": 1500000, "days": 180, "questions": 67, "is_start": False},
 ]
 
-# نقش‌ها
+# ---------- نقش‌ها ----------
 ROLE_OWNER = "owner"
 ROLE_ADMIN = "admin"
 ROLE_TEACHER = "teacher"
@@ -58,7 +59,7 @@ ROLE_ACCOUNTANT = "accountant"
 ROLE_SUPPORT = "support"
 ROLE_USER = "user"
 
-# دروس
+# ---------- دروس ----------
 SUBJECTS = {
     "زیست": {"emoji": "🧬", "prefix": "BIO", "group": TEACHERS_GROUP_BIO},
     "شیمی": {"emoji": "🧪", "prefix": "CHE", "group": TEACHERS_GROUP_CHEM},

@@ -200,3 +200,52 @@ def get_admin_panel_keyboard():
         [InlineKeyboardButton("🚫 روشن/خاموش", callback_data="adm_toggle")],
     ]
     return InlineKeyboardMarkup(keyboard)
+
+
+def get_admin_back_button():
+    keyboard = [
+        [InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_back")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_teacher_management_buttons():
+    keyboard = [
+        [InlineKeyboardButton("➕ افزودن دبیر", callback_data="adm_teacher_add")],
+        [InlineKeyboardButton("🗑 حذف دبیر", callback_data="adm_teacher_remove")],
+        [InlineKeyboardButton("📋 لیست دبیران", callback_data="adm_teacher_list")],
+        [InlineKeyboardButton("🔁 اتصال دبیر به درس", callback_data="adm_teacher_connect")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_subject_buttons(prefix=""):
+    keyboard = [
+        [InlineKeyboardButton("🧬 زیست", callback_data=f"{prefix}bio")],
+        [InlineKeyboardButton("🧪 شیمی", callback_data=f"{prefix}chem")],
+        [InlineKeyboardButton("⚡️ فیزیک", callback_data=f"{prefix}phys")],
+        [InlineKeyboardButton("📐 ریاضی", callback_data=f"{prefix}math")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_staff_management_buttons():
+    keyboard = [
+        [InlineKeyboardButton("☎️ مدیریت پشتیبان‌ها", callback_data="adm_support_manage")],
+        [InlineKeyboardButton("🧮 مدیریت حسابدارها", callback_data="adm_accountant_manage")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_user_management_buttons():
+    keyboard = [
+        [InlineKeyboardButton("🔍 جستجوی کاربر", callback_data="adm_user_search")],
+        [InlineKeyboardButton("🚫 مسدود / رفع مسدود", callback_data="adm_user_block")],
+        [InlineKeyboardButton("🎁 ارسال هدیه", callback_data="adm_user_gift")],
+        [InlineKeyboardButton("💳 مشاهده خریدها", callback_data="adm_user_purchases")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back")],
+    ]
+    return InlineKeyboardMarkup(keyboard)

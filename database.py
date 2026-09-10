@@ -4,11 +4,15 @@ from datetime import datetime
 DB_NAME = "violex.db"
 
 
+# ============================================
+# راه‌اندازی دیتابیس
+# ============================================
+
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
-    # ===== کاربران =====
+    # ---------- جدول کاربران ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -30,7 +34,7 @@ def init_db():
         )
     ''')
 
-    # ===== کارت‌های بانکی =====
+    # ---------- جدول کارت‌های بانکی ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS cards (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,7 +48,7 @@ def init_db():
         )
     ''')
 
-    # ===== سوالات =====
+    # ---------- جدول سوالات ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS questions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,7 +66,7 @@ def init_db():
         )
     ''')
 
-    # ===== تراکنش‌ها =====
+    # ---------- جدول تراکنش‌ها ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,7 +80,7 @@ def init_db():
         )
     ''')
 
-    # ===== تیکت‌های پشتیبانی =====
+    # ---------- جدول تیکت‌های پشتیبانی ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS tickets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,7 +93,7 @@ def init_db():
         )
     ''')
 
-    # ===== ادمین‌ها و نقش‌ها =====
+    # ---------- جدول کارکنان (ادمین، دبیر، پشتیبان، حسابدار) ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS staff (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,7 +105,7 @@ def init_db():
         )
     ''')
 
-    # ===== تنظیمات =====
+    # ---------- جدول تنظیمات ----------
     c.execute('''
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
@@ -111,6 +115,7 @@ def init_db():
 
     conn.commit()
     conn.close()
+    print("✅ دیتابیس با موفقیت راه‌اندازی شد.")
 
 
 # ============================================
@@ -131,7 +136,6 @@ def create_user(user_id, username, first_name, last_name, invited_by=None):
     c = conn.cursor()
     now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
 
-    # بررسی وجود کاربر
     c.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
     if c.fetchone():
         conn.close()
@@ -144,7 +148,6 @@ def create_user(user_id, username, first_name, last_name, invited_by=None):
     ''', (user_id, username, first_name, last_name, invited_by, now))
     conn.commit()
 
-    # هدیه دعوت
     if invited_by:
         c.execute("SELECT user_id FROM users WHERE user_id = ?", (invited_by,))
         if c.fetchone():
@@ -177,7 +180,8 @@ def get_all_users():
 
 
 def get_user_role(user_id):
-    if user_id == 7803165903:
+    from config import OWNER_ID
+    if user_id == OWNER_ID:
         return "owner"
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -188,7 +192,8 @@ def get_user_role(user_id):
 
 
 def is_staff(user_id, role=None):
-    if user_id == 7803165903:
+    from config import OWNER_ID
+    if user_id == OWNER_ID:
         return True
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -282,7 +287,7 @@ def verify_card(card_id, verified=True, reason=None):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     if verified:
-        c.execute("UPDATE cards SET verified = 1 WHERE id = ?", (card_id,))
+        c.execute("UPDATE cards SET verified = 1, rejected_reason = NULL WHERE id = ?", (card_id,))
     else:
         c.execute("UPDATE cards SET verified = 0, rejected_reason = ? WHERE id = ?", (reason, card_id))
     conn.commit()
@@ -370,7 +375,7 @@ def get_waiting_questions(subject=None):
 
 
 # ============================================
-# توابع تیکت
+# توابع تیکت پشتیبانی
 # ============================================
 
 def generate_ticket_code():
