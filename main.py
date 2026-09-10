@@ -1,4 +1,4 @@
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
     MessageHandler, filters, ContextTypes
@@ -12,23 +12,32 @@ from handlers import accountant_panel, admin_panel
 
 
 # ============================================
-# هندلرهای عمومی (غیر از پنل‌های خاص)
+# مسیریاب پیام‌های متنی
 # ============================================
 
 async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مسیریاب پیام‌های متنی"""
 
     # 1) پنل مدیریت (اگر در حالت انتظار ورودی باشد)
-    if await admin_panel.handle_admin_input(update, context):
-        return
+    try:
+        if await admin_panel.handle_admin_input(update, context):
+            return
+    except Exception as e:
+        print(f"Admin input error: {e}")
 
     # 2) پنل حسابداری (دلیل رد کارت)
-    if await accountant_panel.handle_card_reject_reason(update, context):
-        return
+    try:
+        if await accountant_panel.handle_card_reject_reason(update, context):
+            return
+    except Exception as e:
+        print(f"Accountant error: {e}")
 
     # 3) پنل دبیران (سوال تکمیلی)
-    if await teacher_panel.handle_followup(update, context):
-        return
+    try:
+        if await teacher_panel.handle_followup(update, context):
+            return
+    except Exception as e:
+        print(f"Teacher followup error: {e}")
 
     # 4) پنل پشتیبانی (اگر در حالت پاسخ باشد)
     if context.user_data.get('active_ticket_id'):
@@ -48,6 +57,10 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await user_panel.handle_message(update, context)
 
 
+# ============================================
+# مسیریاب پیام‌های عکس
+# ============================================
+
 async def photo_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مسیریاب پیام‌های عکس"""
 
@@ -62,8 +75,11 @@ async def photo_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await user_panel.handle_photo(update, context)
 
 
+# ============================================
+# مسیریاب مخاطبین
+# ============================================
+
 async def contact_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مسیریاب مخاطبین (شماره تلفن)"""
     await user_panel.handle_contact(update, context)
 
 
@@ -122,8 +138,41 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ---- دکمه‌های درباره ما ----
-    if data.startswith("about_"):
-        await user_panel.handle_about_buttons(update, context)
+    if data in ("about_biology", "about_chemistry", "about_physics", "about_math"):
+        # پاسخ به کاربر با اطلاعات دبیر
+        teacher_info = {
+            "about_biology": "🧬 دبیر زیست\n\nنام دبیر: دکتر محمدی\nسابقه تدریس: ۱۲ سال\nمدرس کنکور و آزمون‌های آزمایشی\n\nویژگی تدریس:\n• توضیح مفهومی\n• تحلیل کامل تست\n• بررسی گزینه‌ها\n\n📚 تخصص: زیست کنکور",
+            "about_chemistry": "🧪 دبیر شیمی\n\nنام دبیر: استاد رضایی\nسابقه تدریس: ۱۰ سال\nمدرس کنکور و آزمون‌های آزمایشی\n\nویژگی تدریس:\n• توضیح مفهومی\n• تحلیل کامل تست\n• بررسی گزینه‌ها\n\n📚 تخصص: شیمی کنکور",
+            "about_physics": "⚡️ دبیر فیزیک\n\nنام دبیر: استاد احمدی\nسابقه تدریس: ۱۵ سال\nمدرس کنکور و آزمون‌های آزمایشی\n\nویژگی تدریس:\n• توضیح مفهومی\n• تحلیل کامل تست\n• بررسی گزینه‌ها\n\n📚 تخصص: فیزیک کنکور",
+            "about_math": "📐 دبیر ریاضی\n\nنام دبیر: استاد کریمی\nسابقه تدریس: ۱۴ سال\nمدرس کنکور و آزمون‌های آزمایشی\n\nویژگی تدریس:\n• توضیح مفهومی\n• تحلیل کامل تست\n• بررسی گزینه‌ها\n\n📚 تخصص: ریاضی کنکور",
+        }
+        await query.answer()
+        await query.message.reply_text(
+            teacher_info.get(data, "اطلاعات موجود نیست."),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 برگشت", callback_data="about_back")]
+            ])
+        )
+        return
+
+    # ---- بازگشت از درباره ما ----
+    if data == "about_back":
+        await query.answer()
+        try:
+            await query.message.delete()
+        except:
+            pass
+        await query.message.reply_text(
+            "📚 *درباره ما*\n\n"
+            "برای مشاهده اطلاعات دبیران، یکی از درس‌ها را انتخاب کنید:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🧬 زیست", callback_data="about_biology")],
+                [InlineKeyboardButton("🧪 شیمی", callback_data="about_chemistry")],
+                [InlineKeyboardButton("⚡️ فیزیک", callback_data="about_physics")],
+                [InlineKeyboardButton("📐 ریاضی", callback_data="about_math")],
+            ]),
+            parse_mode="Markdown"
+        )
         return
 
     # ---- دکمه‌های احراز هویت ----
@@ -146,7 +195,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# دستورات
+# دستور /admin
 # ============================================
 
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -41,7 +41,6 @@ async def acc_verify_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     verify_card(card_id, verified=True)
 
-    # ویرایش پیام
     try:
         await query.edit_message_reply_markup(reply_markup=None)
     except:
@@ -86,7 +85,6 @@ async def acc_reject_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.answer("⚠️ لطفاً دلیل رد را ارسال کنید.")
 
-    # ذخیره در context
     context.user_data['rejecting_card_id'] = card_id
 
     await query.message.reply_text(
