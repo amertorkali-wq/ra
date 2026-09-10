@@ -241,7 +241,7 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
                     "❗ *شما هنوز کارت بانکی تأیید شده‌ای ندارید.*\n\n"
                     "لطفاً از بخش «احراز هویت» اقدام کنید.",
                     reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🪪 احراز هویت", callback_data="auth")]
+                        [InlineKeyboardButton("🪪 احراز هویت", callback_data="auth", style="primary")]
                     ]),
                     parse_mode="Markdown"
                 )
@@ -276,7 +276,7 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
             await query.edit_message_text(
                 BUY_QUESTION_TEXT,
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 برگشت", callback_data="back_to_balance")]
+                    [InlineKeyboardButton("🔙 برگشت", callback_data="back_to_balance", style="danger")]
                 ])
             )
         except:
@@ -316,7 +316,7 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
                     await query.edit_message_text(
                         "⚠️ شما قبلاً پکیج استارت را استفاده کرده‌اید.",
                         reply_markup=InlineKeyboardMarkup([
-                            [InlineKeyboardButton("🔙 برگشت", callback_data="back_to_balance")]
+                            [InlineKeyboardButton("🔙 برگشت", callback_data="back_to_balance", style="danger")]
                         ])
                     )
                 except:
@@ -351,7 +351,7 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
                 await query.edit_message_text(
                     "❗ شما کارت تأیید شده ندارید. ابتدا احراز هویت کنید.",
                     reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🪪 احراز هویت", callback_data="auth")]
+                        [InlineKeyboardButton("🪪 احراز هویت", callback_data="auth", style="primary")]
                     ])
                 )
             except:
@@ -587,7 +587,7 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await query.edit_message_text(
                     RULES_FOR_AUTH_TEXT,
                     reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🔙 برگشت", callback_data="auth")]
+                        [InlineKeyboardButton("🔙 برگشت", callback_data="auth", style="danger")]
                     ]),
                     parse_mode="Markdown"
                 )
@@ -604,7 +604,7 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await query.edit_message_text(
                     ADD_CARD_TEXT,
                     reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🔙 برگشت", callback_data="auth")]
+                        [InlineKeyboardButton("🔙 برگشت", callback_data="auth", style="danger")]
                     ]),
                     parse_mode="Markdown"
                 )
@@ -627,8 +627,8 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
             keyboard = []
             for card in cards:
                 masked = f"****{card[2][-4:]}"
-                keyboard.append([InlineKeyboardButton(f"🗑 {masked}", callback_data=f"del_card_{card[0]}")])
-            keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="auth")])
+                keyboard.append([InlineKeyboardButton(f"🗑 {masked}", callback_data=f"del_card_{card[0]}", style="danger")])
+            keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="auth", style="danger")])
             try:
                 await query.edit_message_text(
                     "🗑 *کارت مورد نظر برای حذف را انتخاب کنید:*",
@@ -833,7 +833,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "لطفاً دوباره تلاش کنید یا احراز هویت را لغو کنید.",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔴 لغو احراز هویت", callback_data="cancel_auth")]
+                    [InlineKeyboardButton("🔴 لغو احراز هویت", callback_data="cancel_auth", style="danger")]
                 ])
             )
         return
@@ -868,8 +868,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup([
                         [
-                            InlineKeyboardButton("✅ تأیید کارت", callback_data=f"acc_verify_{card_id}"),
-                            InlineKeyboardButton("❌ رد کارت", callback_data=f"acc_reject_{card_id}"),
+                            InlineKeyboardButton("✅ تأیید کارت", callback_data=f"acc_verify_{card_id}", style="success"),
+                            InlineKeyboardButton("❌ رد کارت", callback_data=f"acc_reject_{card_id}", style="danger"),
                         ]
                     ])
                 )
@@ -897,7 +897,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(
                     "❗ شما کارت تأیید شده ندارید. ابتدا احراز هویت کنید.",
                     reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🪪 احراز هویت", callback_data="auth")]
+                        [InlineKeyboardButton("🪪 احراز هویت", callback_data="auth", style="primary")]
                     ])
                 )
                 return
@@ -942,8 +942,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "🤝 دعوت دوستان":
         referral_link = f"{BOT_LINK}{user_id}"
-        await update.message.reply_text(INVITE_TEXT_1.format(invite_link=referral_link), parse_mode="Markdown")
-        await update.message.reply_text(INVITE_TEXT_2, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
+        try:
+            await update.message.reply_text(
+                INVITE_TEXT_1.format(invite_link=referral_link),
+                parse_mode="Markdown"
+            )
+            await update.message.reply_text(
+                INVITE_TEXT_2,
+                reply_markup=get_main_menu_keyboard(),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            print(f"Error in invite: {e}")
+            await update.message.reply_text(
+                "⚠️ خطا در نمایش لینک دعوت. لطفاً دوباره تلاش کنید.",
+                reply_markup=get_main_menu_keyboard()
+            )
 
     elif text == "📋 درباره ما":
         if ABOUT_IMAGE_URL:
@@ -954,10 +968,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=get_about_buttons(),
                     parse_mode="Markdown"
                 )
-            except:
-                await update.message.reply_text(ABOUT_US_TEXT, reply_markup=get_about_buttons(), parse_mode="Markdown")
+            except Exception as e:
+                print(f"Error sending about image: {e}")
+                await update.message.reply_text(
+                    ABOUT_US_TEXT,
+                    reply_markup=get_about_buttons(),
+                    parse_mode="Markdown"
+                )
         else:
-            await update.message.reply_text(ABOUT_US_TEXT, reply_markup=get_about_buttons(), parse_mode="Markdown")
+            await update.message.reply_text(
+                ABOUT_US_TEXT,
+                reply_markup=get_about_buttons(),
+                parse_mode="Markdown"
+            )
 
     elif text == "☎️ پشتیبانی":
         open_ticket = get_user_open_ticket(user_id)
@@ -995,14 +1018,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 NO_PACKAGE_MSG,
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("📦 خرید پکیج", callback_data="buy_package")]
+                    [InlineKeyboardButton("📦 خرید پکیج", callback_data="buy_package", style="success")]
                 ])
             )
         elif user_info['questions_remaining'] <= 0:
             await update.message.reply_text(
                 NO_QUESTION_MSG,
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("❓ خرید سوال", callback_data="buy_question")]
+                    [InlineKeyboardButton("❓ خرید سوال", callback_data="buy_question", style="success")]
                 ])
             )
         else:
@@ -1062,8 +1085,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
                     [
-                        InlineKeyboardButton("✅ پاسخ دادن", callback_data=f"sup_answer_{ticket_id}"),
-                        InlineKeyboardButton("❌ بستن", callback_data=f"sup_close_{ticket_id}"),
+                        InlineKeyboardButton("✅ پاسخ دادن", callback_data=f"sup_answer_{ticket_id}", style="success"),
+                        InlineKeyboardButton("❌ بستن", callback_data=f"sup_close_{ticket_id}", style="danger"),
                     ]
                 ])
             )
@@ -1113,8 +1136,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup([
                         [
-                            InlineKeyboardButton("✅ پاسخ دادن", callback_data=f"t_answer_{question_id}"),
-                            InlineKeyboardButton("❌ بستن", callback_data=f"t_close_{question_id}"),
+                            InlineKeyboardButton("✅ پاسخ دادن", callback_data=f"t_answer_{question_id}", style="success"),
+                            InlineKeyboardButton("❌ بستن", callback_data=f"t_close_{question_id}", style="danger"),
                         ]
                     ])
                 )

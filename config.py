@@ -10,7 +10,6 @@ CHANNEL_ID = -1003858232624
 CHANNEL_LINK = "https://t.me/violex_official"
 BOT_LINK = "https://t.me/VIOLEXQ_bot?start="
 
-# عکس درباره ما
 ABOUT_IMAGE_URL = "https://i.postimg.cc/Njj6HM7V/IMG-20260505-233450.jpg"
 
 OWNER_ID = 7803165903
@@ -31,11 +30,9 @@ SMSIR_API_KEY = "B33h8avj7PGBquAGfOXPLOw7LKYnmJNBXIN9XuxJLrfK0ojd"
 SMSIR_TEMPLATE_ID = 851804
 SMSIR_LINE_NUMBER = "30004505000017"
 
-# ---------- تنظیمات زیبال ----------
 ZIBAL_MERCHANT = os.environ.get("ZIBAL_MERCHANT", "69e3945ee6d570ad00fd0dad")
 ZIBAL_SANDBOX = False
 
-# ---------- تایم لیمیت‌ها ----------
 TEACHER_TIMEOUT_MINUTES = 180
 SUPPORT_TIMEOUT_HOURS = 24
 

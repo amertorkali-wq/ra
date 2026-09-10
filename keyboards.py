@@ -15,7 +15,7 @@ def get_force_buttons():
 
 
 # ============================================
-# منوی اصلی (Reply Keyboard)
+# منوی اصلی
 # ============================================
 
 def get_main_menu_keyboard():
@@ -92,6 +92,39 @@ def get_about_buttons():
     return InlineKeyboardMarkup(keyboard)
 
 
+def get_teacher_navigation_buttons(subject, current_index, total):
+    keyboard = []
+    row = []
+
+    if total > 1:
+        if current_index > 0:
+            row.append(InlineKeyboardButton(
+                "◀️ دبیر قبلی",
+                callback_data=f"teacher_prev_{subject}_{current_index-1}",
+                style="primary"
+            ))
+        if current_index < total - 1:
+            row.append(InlineKeyboardButton(
+                "دبیر بعدی ▶️",
+                callback_data=f"teacher_next_{subject}_{current_index+1}",
+                style="primary"
+            ))
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton(
+            f"👨‍🏫 دبیر {current_index+1} از {total}",
+            callback_data="noop",
+            style="success"
+        )])
+
+    keyboard.append([InlineKeyboardButton(
+        "🔙 بازگشت به لیست دبیران",
+        callback_data="about_back",
+        style="danger"
+    )])
+    return InlineKeyboardMarkup(keyboard)
+
+
 def get_packages_buttons(has_start_package=False):
     keyboard = []
     for pkg in DEFAULT_PACKAGES:
@@ -160,7 +193,7 @@ def get_payment_buttons(payment_url):
 
 
 # ============================================
-# دبیران
+# دبیران - سوالات
 # ============================================
 
 def get_teacher_question_buttons(question_id):

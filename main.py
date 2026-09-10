@@ -12,6 +12,10 @@ from handlers import user_panel, teacher_panel, support_panel
 from handlers import accountant_panel, admin_panel
 
 
+# ============================================
+# مسیریاب پیام‌های متنی
+# ============================================
+
 async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if await admin_panel.handle_admin_input(update, context):
@@ -65,6 +69,10 @@ async def photo_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def contact_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await user_panel.handle_contact(update, context)
 
+
+# ============================================
+# مسیریاب دکمه‌های شیشه‌ای
+# ============================================
 
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -125,17 +133,26 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         return
 
+    # ---- درباره ما و ناوبری دبیران ----
     if data in ("about_biology", "about_chemistry", "about_physics", "about_math"):
         await teacher_panel.show_teacher_bio(update, context)
+        return
+    if data.startswith("teacher_prev_") or data.startswith("teacher_next_"):
+        await teacher_panel.navigate_teacher(update, context)
+        return
+    if data == "noop":
+        await query.answer()
         return
     if data == "about_back":
         await teacher_panel.back_to_about(update, context)
         return
 
+    # ---- احراز هویت ----
     if data in ("auth", "card_list", "add_card", "remove_card") or data.startswith("del_card_"):
         await user_panel.handle_auth_buttons(update, context)
         return
 
+    # ---- افزایش موجودی ----
     if data in ("buy_package", "buy_question", "back_to_main", "back_to_balance",
                 "pay_wallet", "pay_gateway", "paid_check", "back_to_packages"):
         await user_panel.handle_balance_buttons(update, context)
@@ -145,7 +162,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await user_panel.handle_balance_buttons(update, context)
         return
 
-    # لغو احراز هویت
+    # ---- لغو احراز هویت ----
     if data == "cancel_auth":
         context.user_data.pop('awaiting_auth_code', None)
         context.user_data.pop('awaiting_auth_phone', None)
@@ -169,9 +186,17 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer("⚠️ این دکمه فعال نیست.", show_alert=False)
 
 
+# ============================================
+# دستور /admin
+# ============================================
+
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await admin_panel.admin_command(update, context)
 
+
+# ============================================
+# تابع اصلی
+# ============================================
 
 def main():
     print("🔵 در حال راه‌اندازی دیتابیس PostgreSQL...")
