@@ -1,3 +1,5 @@
+import os
+
 # ============================================
 # تنظیمات ربات VIOLEX
 # ============================================
@@ -30,10 +32,10 @@ SMSIR_TEMPLATE_ID = 851804
 SMSIR_LINE_NUMBER = "30004505000017"
 
 # ---------- تنظیمات زیبال ----------
-import os
 ZIBAL_MERCHANT = os.environ.get("ZIBAL_MERCHANT", "69e3945ee6d570ad00fd0dad")
 ZIBAL_SANDBOX = False
 
+# ---------- تایم لیمیت‌ها ----------
 TEACHER_TIMEOUT_MINUTES = 180
 SUPPORT_TIMEOUT_HOURS = 24
 

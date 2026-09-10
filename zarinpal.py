@@ -1,11 +1,6 @@
-"""
-اتصال به درگاه پرداخت زیبال
-طبق مستندات رسمی: https://gateway.zibal.ir
-"""
 import os
 import requests
 import time
-from config import ZIBAL_SANDBOX
 
 ZIBAL_MERCHANT = os.environ.get("ZIBAL_MERCHANT", "69e3945ee6d570ad00fd0dad")
 
@@ -16,7 +11,6 @@ ZIBAL_INQUIRY_URL = f"{ZIBAL_BASE_URL}/v1/inquiry"
 ZIBAL_STARTPAY = f"{ZIBAL_BASE_URL}/start/"
 
 
-# کدهای نتیجه زیبال (طبق مستندات رسمی)
 ZIBAL_RESULT_CODES = {
     100: "موفق",
     102: "merchant پیدا نشد",
@@ -34,29 +28,14 @@ ZIBAL_RESULT_CODES = {
 
 
 def generate_order_id(user_id):
-    """ساخت orderId یکتا"""
     return f"VIOLEX-{user_id}-{int(time.time())}"
 
 
 def create_payment(amount, description, callback_url=None, mobile=None, order_id=None):
-    """
-    ایجاد تراکنش در زیبال
-    
-    Args:
-        amount: مبلغ به تومان
-        description: توضیحات
-        callback_url: آدرس بازگشت
-        mobile: شماره موبایل
-        order_id: شناسه سفارش یکتا
-    """
-    if not ZIBAL_MERCHANT or len(ZIBAL_MERCHANT) < 36:
-        return {
-            "success": False,
-            "error": f"کد مرچنت نامعتبر است (طول: {len(ZIBAL_MERCHANT) if ZIBAL_MERCHANT else 0} کاراکتر، حداقل 36 کاراکتر لازم است)",
-            "code": -1,
-        }
+    if not ZIBAL_MERCHANT:
+        return {"success": False, "error": "مرچنت تنظیم نشده", "code": -1}
 
-    amount_rial = amount * 10  # تبدیل تومان به ریال
+    amount_rial = amount * 10
 
     payload = {
         "merchant": ZIBAL_MERCHANT,
@@ -94,24 +73,13 @@ def create_payment(amount, description, callback_url=None, mobile=None, order_id
             code = result.get("result")
             error_msg = result.get("message", ZIBAL_RESULT_CODES.get(code, "خطای نامشخص"))
             print(f"🔴 Zibal Error Code: {code}, Message: {error_msg}")
-            return {
-                "success": False,
-                "error": error_msg,
-                "code": code,
-            }
+            return {"success": False, "error": error_msg, "code": code}
     except Exception as e:
         print(f"🔴 Zibal Error: {e}")
         return {"success": False, "error": str(e)}
 
 
 def verify_payment(track_id, amount):
-    """
-    تأیید تراکنش
-    
-    Args:
-        track_id: کد رهگیری (trackId)
-        amount: مبلغ به تومان
-    """
     if not ZIBAL_MERCHANT:
         return {"success": False, "error": "مرچنت تنظیم نشده"}
 
@@ -138,7 +106,6 @@ def verify_payment(track_id, amount):
                 "success": True,
                 "ref_id": result.get("refNumber", "-"),
                 "card_pan": result.get("cardNumber", "-"),
-                "amount": result.get("amount", amount_rial),
             }
         elif result.get("result") == 201:
             return {
@@ -150,36 +117,22 @@ def verify_payment(track_id, amount):
         else:
             code = result.get("result")
             error_msg = result.get("message", ZIBAL_RESULT_CODES.get(code, "خطای تأیید"))
-            return {
-                "success": False,
-                "error": error_msg,
-                "code": code,
-            }
+            return {"success": False, "error": error_msg, "code": code}
     except Exception as e:
         print(f"🔴 Zibal Verify Error: {e}")
         return {"success": False, "error": str(e)}
 
 
 def inquiry_payment(track_id):
-    """استعلام تراکنش"""
     if not ZIBAL_MERCHANT:
         return {"success": False, "error": "مرچنت تنظیم نشده"}
 
-    payload = {
-        "merchant": ZIBAL_MERCHANT,
-        "trackId": int(track_id),
-    }
-
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
+    payload = {"merchant": ZIBAL_MERCHANT, "trackId": int(track_id)}
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
 
     try:
         response = requests.post(ZIBAL_INQUIRY_URL, json=payload, headers=headers, timeout=15)
-        result = response.json()
-        print(f"🟢 Zibal Inquiry: {result}")
-        return result
+        return response.json()
     except Exception as e:
         print(f"🔴 Zibal Inquiry Error: {e}")
         return {"success": False, "error": str(e)}

@@ -126,7 +126,11 @@ def get_cards_for_payment(cards):
     for card in cards:
         masked = f"{card[2][:4]} **** **** {card[2][-4:]}"
         star = "⭐ " if card[6] else ""
-        keyboard.append([InlineKeyboardButton(f"💳 {star}{masked}", callback_data=f"pay_card_{card[0]}", style="success")])
+        keyboard.append([InlineKeyboardButton(
+            f"💳 {star}{masked}",
+            callback_data=f"pay_card_{card[0]}",
+            style="success"
+        )])
     keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="back_to_balance", style="danger")])
     return InlineKeyboardMarkup(keyboard)
 
