@@ -1,118 +1,296 @@
-"""
-اتصال به درگاه پرداخت زرین‌پال
-"""
-import requests
-from config import ZARINPAL_MERCHANT, ZARINPAL_SANDBOX
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from config import DEFAULT_PACKAGES, CHANNEL_LINK
 
 
-if ZARINPAL_SANDBOX:
-    ZARINPAL_REQUEST_URL = "https://sandbox.zarinpal.com/pg/v4/payment/request.json"
-    ZARINPAL_VERIFY_URL = "https://sandbox.zarinpal.com/pg/v4/payment/verify.json"
-    ZARINPAL_STARTPAY = "https://sandbox.zarinpal.com/pg/StartPay/"
-else:
-    ZARINPAL_REQUEST_URL = "https://payment.zarinpal.com/pg/v4/payment/request.json"
-    ZARINPAL_VERIFY_URL = "https://payment.zarinpal.com/pg/v4/payment/verify.json"
-    ZARINPAL_STARTPAY = "https://payment.zarinpal.com/pg/StartPay/"
+# ============================================
+# جوین اجباری
+# ============================================
+
+def get_force_buttons():
+    keyboard = [
+        [InlineKeyboardButton("📢 عضویت در کانال", url=CHANNEL_LINK)],
+        [InlineKeyboardButton("✅ بررسی عضویت", callback_data="check_sub")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
 
-def create_payment(amount, description, callback_url=None, mobile=None, email=None):
-    """ایجاد تراکنش در زرین‌پال"""
-    amount_rial = amount * 10
+# ============================================
+# منوی اصلی (Reply Keyboard)
+# ============================================
 
-    payload = {
-        "merchant_id": ZARINPAL_MERCHANT,
-        "amount": amount_rial,
-        "description": description,
-        "callback_url": callback_url or "https://t.me/VIOLEXQ_bot",
-    }
+def get_main_menu_keyboard():
+    keyboard = [
+        [KeyboardButton("📚 ارسال سوال")],
+        [KeyboardButton("💸 افزایش موجودی"), KeyboardButton("👤 حساب من")],
+        [KeyboardButton("🤝 دعوت دوستان"), KeyboardButton("☎️ پشتیبانی")],
+        [KeyboardButton("🆘 قوانین"), KeyboardButton("📖 راهنما")],
+        [KeyboardButton("📋 درباره ما")],
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-    if mobile:
-        payload["metadata"] = {"mobile": mobile}
-    if email:
-        payload["metadata"] = payload.get("metadata", {})
-        payload["metadata"]["email"] = email
 
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
+def get_lesson_keyboard():
+    keyboard = [
+        [KeyboardButton("🧬 زیست"), KeyboardButton("🧪 شیمی")],
+        [KeyboardButton("⚡️ فیزیک"), KeyboardButton("📐 ریاضی")],
+        [KeyboardButton("🔙 برگشت")],
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-    try:
-        response = requests.post(
-            ZARINPAL_REQUEST_URL,
-            json=payload,
-            headers=headers,
-            timeout=15
-        )
-        result = response.json()
-        print(f"🟢 Zarinpal Request: {result}")
 
-        if result.get("data") and result["data"].get("code") == 100:
-            authority = result["data"]["authority"]
-            payment_url = f"{ZARINPAL_STARTPAY}{authority}"
-            return {
-                "success": True,
-                "authority": authority,
-                "payment_url": payment_url,
-                "fee": result["data"].get("fee", 0),
-            }
+def get_back_keyboard():
+    keyboard = [[KeyboardButton("🔙 برگشت")]]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+
+def get_cancel_question_keyboard():
+    keyboard = [[KeyboardButton("❌ لغو سوال")]]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+
+def get_phone_share_keyboard():
+    keyboard = [[KeyboardButton("📱 اشتراک‌گذاری شماره من", request_contact=True)]]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+
+
+def get_cancel_ticket_keyboard():
+    keyboard = [[KeyboardButton("❌ لغو تیکت")]]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+
+# ============================================
+# افزایش موجودی
+# ============================================
+
+def get_balance_buttons():
+    keyboard = [
+        [InlineKeyboardButton("🪪 احراز هویت", callback_data="auth")],
+        [InlineKeyboardButton("📦 خرید پکیج", callback_data="buy_package")],
+        [InlineKeyboardButton("❓ خرید سوال", callback_data="buy_question")],
+        [InlineKeyboardButton("🔙 منوی اصلی", callback_data="back_to_main")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_auth_buttons():
+    keyboard = [
+        [InlineKeyboardButton("🧾 لیست کارت‌ها", callback_data="card_list")],
+        [InlineKeyboardButton("➕ افزودن کارت", callback_data="add_card")],
+        [InlineKeyboardButton("➖ حذف کارت", callback_data="remove_card")],
+        [InlineKeyboardButton("🔙 منوی اصلی", callback_data="back_to_main")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_about_buttons():
+    keyboard = [
+        [InlineKeyboardButton("🧬 زیست‌شناسی", callback_data="about_biology")],
+        [InlineKeyboardButton("🧪 شیمی", callback_data="about_chemistry")],
+        [InlineKeyboardButton("⚡️ فیزیک", callback_data="about_physics")],
+        [InlineKeyboardButton("📐 ریاضی", callback_data="about_math")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_packages_buttons(has_start_package=False):
+    keyboard = []
+    for pkg in DEFAULT_PACKAGES:
+        if pkg['is_start'] and has_start_package:
+            continue
+
+        if pkg['is_start']:
+            keyboard.append([InlineKeyboardButton(
+                f"🎁 {pkg['name']}",
+                callback_data=f"buy_pkg_{pkg['id']}"
+            )])
         else:
-            error = result.get("errors", {})
-            return {
-                "success": False,
-                "error": str(error),
-                "code": error.get("code") if isinstance(error, dict) else None,
-            }
-    except Exception as e:
-        print(f"🔴 Zarinpal Error: {e}")
-        return {"success": False, "error": str(e)}
+            keyboard.append([InlineKeyboardButton(
+                f"🟡 {pkg['name']} | {pkg['price']:,} تومان | {pkg['questions']} سوال",
+                callback_data=f"buy_pkg_{pkg['id']}"
+            )])
+    keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="back_to_balance")])
+    return InlineKeyboardMarkup(keyboard)
 
 
-def verify_payment(authority, amount):
-    """تأیید تراکنش"""
-    amount_rial = amount * 10
+def get_cards_for_payment(cards):
+    keyboard = []
+    for card in cards:
+        masked = f"{card[2][:4]} **** **** {card[2][-4:]}"
+        star = "⭐ " if card[6] else ""
+        keyboard.append([InlineKeyboardButton(f"{star}💳 {masked}", callback_data=f"pay_card_{card[0]}")])
+    keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="back_to_balance")])
+    return InlineKeyboardMarkup(keyboard)
 
-    payload = {
-        "merchant_id": ZARINPAL_MERCHANT,
-        "amount": amount_rial,
-        "authority": authority,
-    }
 
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
+def get_invoice_buttons(use_wallet=False):
+    if use_wallet:
+        keyboard = [
+            [InlineKeyboardButton("💰 پرداخت با کیف پول", callback_data="pay_wallet")],
+            [InlineKeyboardButton("🔗 پرداخت از درگاه", callback_data="pay_gateway")],
+            [InlineKeyboardButton("❌ لغو", callback_data="back_to_balance")],
+        ]
+    else:
+        keyboard = [
+            [InlineKeyboardButton("🔗 پرداخت از درگاه", callback_data="pay_gateway")],
+            [InlineKeyboardButton("❌ لغو", callback_data="back_to_balance")],
+        ]
+    return InlineKeyboardMarkup(keyboard)
 
-    try:
-        response = requests.post(
-            ZARINPAL_VERIFY_URL,
-            json=payload,
-            headers=headers,
-            timeout=15
-        )
-        result = response.json()
-        print(f"🟢 Zarinpal Verify: {result}")
 
-        if result.get("data") and result["data"].get("code") == 100:
-            return {
-                "success": True,
-                "ref_id": result["data"].get("ref_id"),
-                "card_pan": result["data"].get("card_pan", ""),
-                "card_hash": result["data"].get("card_hash", ""),
-            }
-        elif result.get("data") and result["data"].get("code") == 101:
-            return {
-                "success": True,
-                "ref_id": result["data"].get("ref_id"),
-                "already_verified": True,
-            }
-        else:
-            error = result.get("errors", {})
-            return {
-                "success": False,
-                "error": str(error),
-                "code": error.get("code") if isinstance(error, dict) else None,
-            }
-    except Exception as e:
-        print(f"🔴 Zarinpal Verify Error: {e}")
-        return {"success": False, "error": str(e)}
+def get_payment_buttons(payment_url):
+    keyboard = [
+        [InlineKeyboardButton("💳 ورود به درگاه پرداخت", url=payment_url)],
+        [InlineKeyboardButton("✅ پرداخت کردم", callback_data="paid_check")],
+        [InlineKeyboardButton("❌ لغو", callback_data="back_to_balance")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+# ============================================
+# دبیران
+# ============================================
+
+def get_teacher_question_buttons(question_id):
+    keyboard = [
+        [InlineKeyboardButton("✅ پاسخ دادن", callback_data=f"t_answer_{question_id}")],
+        [InlineKeyboardButton("❌ بستن", callback_data=f"t_close_{question_id}")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_teacher_close_button(question_id):
+    keyboard = [[InlineKeyboardButton("❌ بستن سوال", callback_data=f"t_close_{question_id}")]]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_student_answer_buttons(question_id):
+    keyboard = [
+        [InlineKeyboardButton("✅ متوجه شدم", callback_data=f"s_understood_{question_id}")],
+        [InlineKeyboardButton("❓ سوال تکمیلی", callback_data=f"s_followup_{question_id}")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+# ============================================
+# پشتیبانی
+# ============================================
+
+def get_support_ticket_buttons(ticket_id):
+    keyboard = [
+        [InlineKeyboardButton("✅ پاسخ دادن", callback_data=f"sup_answer_{ticket_id}")],
+        [InlineKeyboardButton("❌ بستن", callback_data=f"sup_close_{ticket_id}")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_support_close_button(ticket_id):
+    keyboard = [[InlineKeyboardButton("❌ بستن تیکت", callback_data=f"sup_close_{ticket_id}")]]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_user_ticket_buttons(ticket_id):
+    keyboard = [
+        [InlineKeyboardButton("💬 ادامه صحبت", callback_data=f"user_continue_{ticket_id}")],
+        [InlineKeyboardButton("✅ بستن تیکت", callback_data=f"user_close_{ticket_id}")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_user_ticket_waiting_buttons(ticket_id):
+    keyboard = [
+        [InlineKeyboardButton("✅ بستن تیکت", callback_data=f"user_close_{ticket_id}")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+# ============================================
+# حسابداری
+# ============================================
+
+def get_card_verify_buttons(card_id):
+    keyboard = [
+        [InlineKeyboardButton("✅ تأیید کارت", callback_data=f"acc_verify_{card_id}")],
+        [InlineKeyboardButton("❌ رد کارت", callback_data=f"acc_reject_{card_id}")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_card_verified_button(card_id):
+    keyboard = [[InlineKeyboardButton("✅ تأیید شده", callback_data="noop")]]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_transaction_buttons(transaction_id):
+    keyboard = [
+        [InlineKeyboardButton("⭕ تأیید پرداخت", callback_data=f"acc_tx_ok_{transaction_id}")],
+        [InlineKeyboardButton("❌ رد پرداخت", callback_data=f"acc_tx_no_{transaction_id}")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+# ============================================
+# پنل مدیریت
+# ============================================
+
+def get_admin_panel_keyboard():
+    keyboard = [
+        [InlineKeyboardButton("👤 مدیریت ادمین", callback_data="adm_manage_admins")],
+        [InlineKeyboardButton("🫅🏻 مدیریت مالک", callback_data="adm_manage_owners")],
+        [InlineKeyboardButton("👨‍🏫 مدیریت دبیران", callback_data="adm_manage_teachers")],
+        [InlineKeyboardButton("🧑🏻‍💻 مدیریت کادر", callback_data="adm_manage_staff")],
+        [InlineKeyboardButton("👫 مدیریت کاربران", callback_data="adm_manage_users")],
+        [InlineKeyboardButton("📊 آمار", callback_data="adm_stats")],
+        [InlineKeyboardButton("💸 صورت حساب", callback_data="adm_invoices")],
+        [InlineKeyboardButton("📣 پیام همگانی", callback_data="adm_broadcast")],
+        [InlineKeyboardButton("⚙️ تنظیمات ربات", callback_data="adm_settings")],
+        [InlineKeyboardButton("🎁 هدیه", callback_data="adm_gift")],
+        [InlineKeyboardButton("🚫 روشن/خاموش", callback_data="adm_toggle")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_admin_back_button():
+    keyboard = [[InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_back")]]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_teacher_management_buttons():
+    keyboard = [
+        [InlineKeyboardButton("➕ افزودن دبیر", callback_data="adm_teacher_add")],
+        [InlineKeyboardButton("🗑 حذف دبیر", callback_data="adm_teacher_remove")],
+        [InlineKeyboardButton("📋 لیست دبیران", callback_data="adm_teacher_list")],
+        [InlineKeyboardButton("🔁 اتصال دبیر به درس", callback_data="adm_teacher_connect")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_subject_buttons(prefix=""):
+    keyboard = [
+        [InlineKeyboardButton("🧬 زیست", callback_data=f"{prefix}bio")],
+        [InlineKeyboardButton("🧪 شیمی", callback_data=f"{prefix}chem")],
+        [InlineKeyboardButton("⚡️ فیزیک", callback_data=f"{prefix}phys")],
+        [InlineKeyboardButton("📐 ریاضی", callback_data=f"{prefix}math")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_staff_management_buttons():
+    keyboard = [
+        [InlineKeyboardButton("☎️ مدیریت پشتیبان‌ها", callback_data="adm_support_manage")],
+        [InlineKeyboardButton("🧮 مدیریت حسابدارها", callback_data="adm_accountant_manage")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_user_management_buttons():
+    keyboard = [
+        [InlineKeyboardButton("🔍 جستجوی کاربر", callback_data="adm_user_search")],
+        [InlineKeyboardButton("🚫 مسدود / رفع مسدود", callback_data="adm_user_block")],
+        [InlineKeyboardButton("🎁 ارسال هدیه", callback_data="adm_user_gift")],
+        [InlineKeyboardButton("💳 مشاهده خریدها", callback_data="adm_user_purchases")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
