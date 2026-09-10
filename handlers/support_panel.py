@@ -1,11 +1,11 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-from config import SUPPORT_TIMEOUT_HOURS
+from config import SUPPORT_TIMEOUT_HOURS, SUPPORT_GROUP
 from database import (
     get_ticket, reply_ticket, close_ticket, is_staff,
     get_open_ticket_for_support, take_ticket, add_ticket_message,
-    get_shamsi_now, get_expired_tickets
+    get_shamsi_now, get_expired_tickets, get_user
 )
 from texts import (
     SUPPORT_ANSWER_REQUEST, SUPPORT_BUSY, SUPPORT_TICKET_TAKEN,
@@ -37,7 +37,7 @@ async def support_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("⛔ شما پشتیبان نیستید.", show_alert=True)
         return
 
-    # بررسی صف
+    # بررسی صف: پشتیبان تیکت باز دارد؟
     open_ticket = get_open_ticket_for_support(user_id)
     if open_ticket and open_ticket != ticket_id:
         await query.answer(SUPPORT_BUSY, show_alert=True)
@@ -117,7 +117,7 @@ async def support_send_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return True
 
     student_id = ticket[1]
-    text = update.message.text
+    text = update.message.text or update.message.caption or ""
 
     # ثبت پاسخ
     reply_ticket(ticket_id, text)
@@ -140,10 +140,7 @@ async def support_send_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
         from keyboards import get_user_ticket_buttons
         await context.bot.send_message(
             chat_id=student_id,
-            text=(
-                f"🔄 *آیا مشکل شما حل شد؟*\n\n"
-                f"می‌توانید دوباره صحبت کنید یا تیکت را ببندید."
-            ),
+            text="🔄 *آیا مشکل شما حل شد؟*",
             reply_markup=get_user_ticket_buttons(ticket_id),
             parse_mode="Markdown"
         )
@@ -152,8 +149,7 @@ async def support_send_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     await update.message.reply_text(
         f"✅ *پاسخ شما به کاربر ارسال شد.*\n\n"
-        f"🆔 کد پیگیری: `{ticket[2]}`\n\n"
-        f"اکنون می‌توانید تیکت را ببندید یا منتظر پاسخ کاربر بمانید.",
+        f"🆔 کد پیگیری: `{ticket[2]}`",
         parse_mode="Markdown"
     )
 
@@ -239,8 +235,7 @@ async def user_continue_ticket(update: Update, context: ContextTypes.DEFAULT_TYP
 
     await query.message.reply_text(
         "💬 *لطفاً پیام خود را ارسال کنید.*\n\n"
-        "می‌توانید متن، عکس یا فایل ارسال کنید.\n\n"
-        "برای لغو، روی دکمه زیر بزنید.",
+        "می‌توانید متن، عکس یا فایل ارسال کنید.",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("❌ لغو", callback_data="cancel_ticket_msg")]
         ]),
@@ -280,7 +275,6 @@ async def user_send_ticket_message(update: Update, context: ContextTypes.DEFAULT
     add_ticket_message(ticket_id, 'user', user_id, update.message.message_id, text, file_id)
 
     # ارسال به گروه پشتیبانی
-    from config import SUPPORT_GROUP
     try:
         msg_text = (
             f"💬 *پیام جدید در تیکت* `{ticket[2]}`\n\n"
@@ -312,7 +306,13 @@ async def user_send_ticket_message(update: Update, context: ContextTypes.DEFAULT
             await context.bot.send_message(
                 chat_id=SUPPORT_GROUP,
                 text=msg_text,
-                parse_mode="Markdown"
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([
+                    [
+                        InlineKeyboardButton("✅ پاسخ دادن", callback_data=f"sup_answer_{ticket_id}"),
+                        InlineKeyboardButton("❌ بستن", callback_data=f"sup_close_{ticket_id}"),
+                    ]
+                ])
             )
     except Exception as e:
         print(f"Error sending to support: {e}")

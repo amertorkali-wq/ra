@@ -141,7 +141,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "cancel_ticket_msg":
         context.user_data.pop('in_ticket', None)
         await query.answer("❌ لغو شد.")
-        await query.message.delete()
+        try:
+            await query.message.delete()
+        except:
+            pass
         return
 
     # ---- درباره ما ----
@@ -184,6 +187,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================================
 
 def main():
+    print("🔵 در حال راه‌اندازی دیتابیس PostgreSQL...")
     init_db()
 
     app = Application.builder().token(TOKEN).build()
@@ -203,20 +207,21 @@ def main():
     # هر ۵ دقیقه بررسی تایم اوت دبیران
     job_queue.run_repeating(
         teacher_panel.check_teacher_timeouts,
-        interval=300,  # 5 دقیقه
+        interval=300,
         first=60
     )
 
     # هر ۳۰ دقیقه بررسی تایم اوت پشتیبانی
     job_queue.run_repeating(
         support_panel.check_support_timeouts,
-        interval=1800,  # 30 دقیقه
+        interval=1800,
         first=120
     )
 
     print("✅ ربات VIOLEX با موفقیت راه‌اندازی شد!")
     print(f"⏰ تایم لیمیت دبیران: {TEACHER_TIMEOUT_MINUTES} دقیقه")
     print(f"⏰ تایم لیمیت پشتیبانی: {SUPPORT_TIMEOUT_HOURS} ساعت")
+    print("💾 دیتابیس: PostgreSQL (دائمی)")
     print("🚀 در حال اجرا...")
 
     app.run_polling(allowed_updates=Update.ALL_TYPES)

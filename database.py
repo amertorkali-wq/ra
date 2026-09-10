@@ -1,31 +1,60 @@
-import sqlite3
+import os
+import psycopg2
+import psycopg2.extras
 from datetime import datetime
 import jdatetime
 
-DB_NAME = "violex.db"
 
+# ============================================
+# اتصال به PostgreSQL
+# ============================================
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if not DATABASE_URL:
+    print("⚠️ هشدار: DATABASE_URL تنظیم نشده! دیتابیس محلی استفاده می‌شود.")
+    DATABASE_URL = None
+
+
+def get_connection():
+    """اتصال به PostgreSQL"""
+    if not DATABASE_URL:
+        raise Exception("DATABASE_URL تنظیم نشده است")
+    
+    # Railway از postgres:// استفاده می‌کند، اما psycopg2 به postgresql:// نیاز دارد
+    url = DATABASE_URL
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    
+    conn = psycopg2.connect(url)
+    return conn
+
+
+# ============================================
+# راه‌اندازی دیتابیس
+# ============================================
 
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
 
-    # ---------- کاربران ----------
+    # کاربران
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
+            user_id BIGINT PRIMARY KEY,
             username TEXT,
             first_name TEXT,
             last_name TEXT,
             phone TEXT,
             phone_verified INTEGER DEFAULT 0,
             verification_code TEXT,
-            wallet INTEGER DEFAULT 0,
+            wallet BIGINT DEFAULT 0,
             questions_remaining INTEGER DEFAULT 0,
             questions_used INTEGER DEFAULT 0,
             active_package TEXT DEFAULT '0',
             package_expire_date TEXT DEFAULT '-',
             referrals INTEGER DEFAULT 0,
-            invited_by INTEGER DEFAULT NULL,
+            invited_by BIGINT DEFAULT NULL,
             invited_by_rewarded INTEGER DEFAULT 0,
             has_start_package INTEGER DEFAULT 0,
             is_blocked INTEGER DEFAULT 0,
@@ -34,11 +63,11 @@ def init_db():
         )
     ''')
 
-    # ---------- کارت‌های بانکی ----------
+    # کارت‌ها
     c.execute('''
         CREATE TABLE IF NOT EXISTS cards (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
+            id SERIAL PRIMARY KEY,
+            user_id BIGINT,
             card_number TEXT,
             card_holder TEXT,
             photo_file_id TEXT,
@@ -49,18 +78,18 @@ def init_db():
         )
     ''')
 
-    # ---------- سوالات ----------
+    # سوالات
     c.execute('''
         CREATE TABLE IF NOT EXISTS questions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
+            id SERIAL PRIMARY KEY,
+            user_id BIGINT,
             subject TEXT,
             question_code TEXT UNIQUE,
             question_text TEXT,
             description TEXT,
             file_id TEXT,
             status TEXT DEFAULT 'waiting',
-            teacher_id INTEGER DEFAULT NULL,
+            teacher_id BIGINT DEFAULT NULL,
             teacher_username TEXT DEFAULT NULL,
             teacher_name TEXT DEFAULT NULL,
             taken_time TEXT,
@@ -71,25 +100,25 @@ def init_db():
         )
     ''')
 
-    # ---------- پاسخ‌های دبیر ----------
+    # پاسخ‌های دبیر
     c.execute('''
         CREATE TABLE IF NOT EXISTS question_replies (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             question_id INTEGER,
-            teacher_id INTEGER,
-            message_id INTEGER,
+            teacher_id BIGINT,
+            message_id BIGINT,
             content TEXT,
             file_id TEXT,
             created_at TEXT
         )
     ''')
 
-    # ---------- تراکنش‌ها ----------
+    # تراکنش‌ها
     c.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            amount INTEGER,
+            id SERIAL PRIMARY KEY,
+            user_id BIGINT,
+            amount BIGINT,
             card_number TEXT,
             transaction_id TEXT,
             status TEXT,
@@ -98,15 +127,15 @@ def init_db():
         )
     ''')
 
-    # ---------- تیکت‌های پشتیبانی ----------
+    # تیکت‌های پشتیبانی
     c.execute('''
         CREATE TABLE IF NOT EXISTS tickets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
+            id SERIAL PRIMARY KEY,
+            user_id BIGINT,
             ticket_code TEXT UNIQUE,
             message TEXT,
             status TEXT DEFAULT 'waiting',
-            support_id INTEGER DEFAULT NULL,
+            support_id BIGINT DEFAULT NULL,
             support_username TEXT DEFAULT NULL,
             support_name TEXT DEFAULT NULL,
             support_taken_time TEXT,
@@ -118,40 +147,40 @@ def init_db():
         )
     ''')
 
-    # ---------- پیام‌های داخل تیکت ----------
+    # پیام‌های داخل تیکت
     c.execute('''
         CREATE TABLE IF NOT EXISTS ticket_messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             ticket_id INTEGER,
             sender_type TEXT,
-            sender_id INTEGER,
-            message_id INTEGER,
+            sender_id BIGINT,
+            message_id BIGINT,
             content TEXT,
             file_id TEXT,
             created_at TEXT
         )
     ''')
 
-    # ---------- کارکنان ----------
+    # کارکنان
     c.execute('''
         CREATE TABLE IF NOT EXISTS staff (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
+            id SERIAL PRIMARY KEY,
+            user_id BIGINT,
             username TEXT,
             role TEXT,
             subject TEXT,
-            added_by INTEGER,
+            added_by BIGINT,
             created_at TEXT
         )
     ''')
 
-    # ---------- پرداخت‌ها ----------
+    # پرداخت‌ها
     c.execute('''
         CREATE TABLE IF NOT EXISTS payments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
+            id SERIAL PRIMARY KEY,
+            user_id BIGINT,
             authority TEXT UNIQUE,
-            amount INTEGER,
+            amount BIGINT,
             description TEXT,
             card_id INTEGER DEFAULT NULL,
             status TEXT DEFAULT 'pending',
@@ -162,7 +191,7 @@ def init_db():
         )
     ''')
 
-    # ---------- تنظیمات ----------
+    # تنظیمات
     c.execute('''
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
@@ -171,8 +200,9 @@ def init_db():
     ''')
 
     conn.commit()
+    c.close()
     conn.close()
-    print("✅ دیتابیس با موفقیت راه‌اندازی شد.")
+    print("✅ دیتابیس PostgreSQL با موفقیت راه‌اندازی شد.")
 
 
 # ============================================
@@ -192,52 +222,38 @@ def get_shamsi_future_date(days):
     return future.strftime("%Y/%m/%d")
 
 
-def get_shamsi_datetime():
-    return jdatetime.datetime.now()
-
-
-def parse_shamsi(dt_str):
-    """تبدیل رشته شمسی به آبجکت datetime"""
-    if not dt_str:
-        return None
-    try:
-        return jdatetime.datetime.strptime(dt_str, "%Y/%m/%d %H:%M:%S")
-    except:
-        try:
-            return jdatetime.datetime.strptime(dt_str, "%Y/%m/%d")
-        except:
-            return None
-
-
 # ============================================
 # کاربران
 # ============================================
 
 def get_user(user_id):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+    c.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
     user = c.fetchone()
+    c.close()
     conn.close()
     return user
 
 
 def create_user(user_id, username, first_name, last_name, invited_by=None):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
 
-    c.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
+    c.execute("SELECT user_id FROM users WHERE user_id = %s", (user_id,))
     if c.fetchone():
+        c.close()
         conn.close()
         return False
 
     c.execute('''
         INSERT INTO users
         (user_id, username, first_name, last_name, invited_by, created_at, package_expire_date)
-        VALUES (?, ?, ?, ?, ?, ?, '-')
+        VALUES (%s, %s, %s, %s, %s, %s, '-')
     ''', (user_id, username, first_name, last_name, invited_by, now))
     conn.commit()
+    c.close()
     conn.close()
     return True
 
@@ -245,32 +261,36 @@ def create_user(user_id, username, first_name, last_name, invited_by=None):
 def update_user(user_id, **kwargs):
     if not kwargs:
         return
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     for key, value in kwargs.items():
-        c.execute(f"UPDATE users SET {key} = ? WHERE user_id = ?", (value, user_id))
+        c.execute(f"UPDATE users SET {key} = %s WHERE user_id = %s", (value, user_id))
     conn.commit()
+    c.close()
     conn.close()
 
 
 def reward_inviter(invited_user_id):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
 
-    c.execute("SELECT invited_by, invited_by_rewarded FROM users WHERE user_id = ?", (invited_user_id,))
+    c.execute("SELECT invited_by, invited_by_rewarded FROM users WHERE user_id = %s", (invited_user_id,))
     row = c.fetchone()
     if not row:
+        c.close()
         conn.close()
         return None
 
     inviter_id, already_rewarded = row
     if already_rewarded or not inviter_id:
+        c.close()
         conn.close()
         return None
 
-    c.execute("SELECT wallet, referrals, questions_remaining FROM users WHERE user_id = ?", (inviter_id,))
+    c.execute("SELECT wallet, referrals, questions_remaining FROM users WHERE user_id = %s", (inviter_id,))
     inviter = c.fetchone()
     if not inviter:
+        c.close()
         conn.close()
         return None
 
@@ -278,22 +298,24 @@ def reward_inviter(invited_user_id):
 
     c.execute('''
         UPDATE users
-        SET wallet = ?, referrals = ?, questions_remaining = ?
-        WHERE user_id = ?
+        SET wallet = %s, referrals = %s, questions_remaining = %s
+        WHERE user_id = %s
     ''', (inviter[0] + INVITE_REWARD, inviter[1] + 1, inviter[2] + INVITE_REWARD_QUESTIONS, inviter_id))
 
-    c.execute("UPDATE users SET invited_by_rewarded = 1 WHERE user_id = ?", (invited_user_id,))
+    c.execute("UPDATE users SET invited_by_rewarded = 1 WHERE user_id = %s", (invited_user_id,))
 
     conn.commit()
+    c.close()
     conn.close()
     return inviter_id
 
 
 def get_all_users():
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     c.execute("SELECT user_id FROM users")
     users = [row[0] for row in c.fetchall()]
+    c.close()
     conn.close()
     return users
 
@@ -302,10 +324,11 @@ def get_user_role(user_id):
     from config import OWNER_ID
     if user_id == OWNER_ID:
         return "owner"
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT role FROM staff WHERE user_id = ? LIMIT 1", (user_id,))
+    c.execute("SELECT role FROM staff WHERE user_id = %s LIMIT 1", (user_id,))
     row = c.fetchone()
+    c.close()
     conn.close()
     return row[0] if row else "user"
 
@@ -314,45 +337,49 @@ def is_staff(user_id, role=None):
     from config import OWNER_ID
     if user_id == OWNER_ID:
         return True
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     if role:
-        c.execute("SELECT id FROM staff WHERE user_id = ? AND role = ?", (user_id, role))
+        c.execute("SELECT id FROM staff WHERE user_id = %s AND role = %s", (user_id, role))
     else:
-        c.execute("SELECT id FROM staff WHERE user_id = ?", (user_id,))
+        c.execute("SELECT id FROM staff WHERE user_id = %s", (user_id,))
     row = c.fetchone()
+    c.close()
     conn.close()
     return row is not None
 
 
 def add_staff(user_id, role, username=None, subject=None, added_by=None):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
     c.execute('''
         INSERT INTO staff (user_id, username, role, subject, added_by, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s)
     ''', (user_id, username, role, subject, added_by, now))
     conn.commit()
+    c.close()
     conn.close()
 
 
 def remove_staff(user_id, role=None):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     if role:
-        c.execute("DELETE FROM staff WHERE user_id = ? AND role = ?", (user_id, role))
+        c.execute("DELETE FROM staff WHERE user_id = %s AND role = %s", (user_id, role))
     else:
-        c.execute("DELETE FROM staff WHERE user_id = ?", (user_id,))
+        c.execute("DELETE FROM staff WHERE user_id = %s", (user_id,))
     conn.commit()
+    c.close()
     conn.close()
 
 
 def get_staff_list(role):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT user_id, username, subject FROM staff WHERE role = ?", (role,))
+    c.execute("SELECT user_id, username, subject FROM staff WHERE role = %s", (role,))
     rows = c.fetchall()
+    c.close()
     conn.close()
     return rows
 
@@ -362,18 +389,20 @@ def get_staff_list(role):
 # ============================================
 
 def set_verification_code(user_id, code):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
-    c.execute("UPDATE users SET verification_code = ? WHERE user_id = ?", (code, user_id))
+    c.execute("UPDATE users SET verification_code = %s WHERE user_id = %s", (code, user_id))
     conn.commit()
+    c.close()
     conn.close()
 
 
 def get_verification_code(user_id):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT verification_code FROM users WHERE user_id = ?", (user_id,))
+    c.execute("SELECT verification_code FROM users WHERE user_id = %s", (user_id,))
     row = c.fetchone()
+    c.close()
     conn.close()
     return row[0] if row else None
 
@@ -383,68 +412,73 @@ def get_verification_code(user_id):
 # ============================================
 
 def add_card(user_id, card_number, card_holder, photo_file_id):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
 
-    # بررسی کارت پیش‌فرض
-    c.execute("SELECT COUNT(*) FROM cards WHERE user_id = ? AND verified = 1", (user_id,))
+    c.execute("SELECT COUNT(*) FROM cards WHERE user_id = %s AND verified = 1", (user_id,))
     count = c.fetchone()[0]
     is_primary = 1 if count == 0 else 0
 
     c.execute('''
         INSERT INTO cards (user_id, card_number, card_holder, photo_file_id, is_primary, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
     ''', (user_id, card_number, card_holder, photo_file_id, is_primary, now))
-    card_id = c.lastrowid
+    card_id = c.fetchone()[0]
     conn.commit()
+    c.close()
     conn.close()
     return card_id
 
 
 def get_user_cards(user_id):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM cards WHERE user_id = ? ORDER BY id DESC", (user_id,))
+    c.execute("SELECT * FROM cards WHERE user_id = %s ORDER BY id DESC", (user_id,))
     cards = c.fetchall()
+    c.close()
     conn.close()
     return cards
 
 
 def get_verified_cards(user_id):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM cards WHERE user_id = ? AND verified = 1 ORDER BY is_primary DESC, id DESC", (user_id,))
+    c.execute("SELECT * FROM cards WHERE user_id = %s AND verified = 1 ORDER BY is_primary DESC, id DESC", (user_id,))
     cards = c.fetchall()
+    c.close()
     conn.close()
     return cards
 
 
 def get_card(card_id):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM cards WHERE id = ?", (card_id,))
+    c.execute("SELECT * FROM cards WHERE id = %s", (card_id,))
     card = c.fetchone()
+    c.close()
     conn.close()
     return card
 
 
 def verify_card(card_id, verified=True, reason=None):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     if verified:
-        c.execute("UPDATE cards SET verified = 1, rejected_reason = NULL WHERE id = ?", (card_id,))
+        c.execute("UPDATE cards SET verified = 1, rejected_reason = NULL WHERE id = %s", (card_id,))
     else:
-        c.execute("UPDATE cards SET verified = 0, rejected_reason = ? WHERE id = ?", (reason, card_id))
+        c.execute("UPDATE cards SET verified = 0, rejected_reason = %s WHERE id = %s", (reason, card_id))
     conn.commit()
+    c.close()
     conn.close()
 
 
 def delete_card(card_id):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
-    c.execute("DELETE FROM cards WHERE id = ?", (card_id,))
+    c.execute("DELETE FROM cards WHERE id = %s", (card_id,))
     conn.commit()
+    c.close()
     conn.close()
 
 
@@ -455,44 +489,48 @@ def delete_card(card_id):
 def generate_question_code(subject):
     from config import SUBJECTS
     prefix = SUBJECTS.get(subject, {}).get("prefix", "Q")
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM questions")
     count = c.fetchone()[0] + 1
+    c.close()
     conn.close()
     return f"{prefix}-{count + 1000}"
 
 
 def create_question(user_id, subject, question_text, description, file_id=None):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
     code = generate_question_code(subject)
     c.execute('''
         INSERT INTO questions
         (user_id, subject, question_code, question_text, description, file_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
     ''', (user_id, subject, code, question_text, description, file_id, now))
-    question_id = c.lastrowid
+    question_id = c.fetchone()[0]
     conn.commit()
+    c.close()
     conn.close()
     return question_id, code
 
 
 def get_question(question_id):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM questions WHERE id = ?", (question_id,))
+    c.execute("SELECT * FROM questions WHERE id = %s", (question_id,))
     q = c.fetchone()
+    c.close()
     conn.close()
     return q
 
 
 def get_question_by_code(code):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM questions WHERE question_code = ?", (code,))
+    c.execute("SELECT * FROM questions WHERE question_code = %s", (code,))
     q = c.fetchone()
+    c.close()
     conn.close()
     return q
 
@@ -500,51 +538,53 @@ def get_question_by_code(code):
 def update_question(question_id, **kwargs):
     if not kwargs:
         return
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     for key, value in kwargs.items():
-        c.execute(f"UPDATE questions SET {key} = ? WHERE id = ?", (value, question_id))
+        c.execute(f"UPDATE questions SET {key} = %s WHERE id = %s", (value, question_id))
     conn.commit()
+    c.close()
     conn.close()
 
 
 def get_waiting_questions(subject=None):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     if subject:
-        c.execute("SELECT * FROM questions WHERE status = 'waiting' AND subject = ? ORDER BY id", (subject,))
+        c.execute("SELECT * FROM questions WHERE status = 'waiting' AND subject = %s ORDER BY id", (subject,))
     else:
         c.execute("SELECT * FROM questions WHERE status = 'waiting' ORDER BY id")
     rows = c.fetchall()
+    c.close()
     conn.close()
     return rows
 
 
 def get_teacher_active_question(teacher_id):
-    """سوال فعال دبیر (اگر دارد)"""
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     c.execute('''
         SELECT id, question_code FROM questions
-        WHERE teacher_id = ? AND status IN ('taken', 'answered')
+        WHERE teacher_id = %s AND status IN ('taken', 'answered')
         LIMIT 1
     ''', (teacher_id,))
     row = c.fetchone()
+    c.close()
     conn.close()
     return row
 
 
 def get_expired_questions():
-    """سوالاتی که تایم لیمیت دبیر تمام شده"""
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
     c.execute('''
         SELECT id, question_code, teacher_id
         FROM questions
-        WHERE status = 'taken' AND timeout_time IS NOT NULL AND timeout_time < ?
+        WHERE status = 'taken' AND timeout_time IS NOT NULL AND timeout_time < %s
     ''', (now,))
     rows = c.fetchall()
+    c.close()
     conn.close()
     return rows
 
@@ -554,26 +594,18 @@ def get_expired_questions():
 # ============================================
 
 def add_question_reply(question_id, teacher_id, message_id, content, file_id=None):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
     c.execute('''
         INSERT INTO question_replies (question_id, teacher_id, message_id, content, file_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
     ''', (question_id, teacher_id, message_id, content, file_id, now))
-    reply_id = c.lastrowid
+    reply_id = c.fetchone()[0]
     conn.commit()
+    c.close()
     conn.close()
     return reply_id
-
-
-def get_question_replies(question_id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT * FROM question_replies WHERE question_id = ? ORDER BY id", (question_id,))
-    rows = c.fetchall()
-    conn.close()
-    return rows
 
 
 # ============================================
@@ -581,68 +613,71 @@ def get_question_replies(question_id):
 # ============================================
 
 def generate_ticket_code():
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM tickets")
     count = c.fetchone()[0] + 1
+    c.close()
     conn.close()
     return f"SUP-{count + 1000}"
 
 
 def create_ticket(user_id, message):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
     code = generate_ticket_code()
     c.execute('''
         INSERT INTO tickets (user_id, ticket_code, message, created_at)
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s) RETURNING id
     ''', (user_id, code, message, now))
-    ticket_id = c.lastrowid
+    ticket_id = c.fetchone()[0]
     conn.commit()
+    c.close()
     conn.close()
     return ticket_id, code
 
 
 def get_ticket(ticket_id):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,))
+    c.execute("SELECT * FROM tickets WHERE id = %s", (ticket_id,))
     t = c.fetchone()
+    c.close()
     conn.close()
     return t
 
 
 def get_user_open_ticket(user_id):
-    """تیکت باز کاربر (اگر دارد)"""
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     c.execute('''
         SELECT id, ticket_code, status FROM tickets
-        WHERE user_id = ? AND status IN ('waiting', 'taken', 'answered')
+        WHERE user_id = %s AND status IN ('waiting', 'taken', 'answered')
         ORDER BY id DESC LIMIT 1
     ''', (user_id,))
     row = c.fetchone()
+    c.close()
     conn.close()
     return row
 
 
 def get_open_ticket_for_support(support_id):
-    """تیکت باز پشتیبان"""
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     c.execute('''
         SELECT id FROM tickets
-        WHERE support_id = ? AND status IN ('taken', 'answered')
+        WHERE support_id = %s AND status IN ('taken', 'answered')
         LIMIT 1
     ''', (support_id,))
     row = c.fetchone()
+    c.close()
     conn.close()
     return row[0] if row else None
 
 
 def take_ticket(ticket_id, support_id, support_username, support_name):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
     from config import SUPPORT_TIMEOUT_HOURS
@@ -650,70 +685,74 @@ def take_ticket(ticket_id, support_id, support_username, support_name):
     c.execute('''
         UPDATE tickets
         SET status = 'taken',
-            support_id = ?,
-            support_username = ?,
-            support_name = ?,
-            support_taken_time = ?,
-            timeout_time = ?
-        WHERE id = ?
+            support_id = %s,
+            support_username = %s,
+            support_name = %s,
+            support_taken_time = %s,
+            timeout_time = %s
+        WHERE id = %s
     ''', (support_id, support_username, support_name, now, timeout, ticket_id))
     conn.commit()
+    c.close()
     conn.close()
 
 
 def reply_ticket(ticket_id, reply, new_timeout_hours=24):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
     timeout = (jdatetime.datetime.now() + jdatetime.timedelta(hours=new_timeout_hours)).strftime("%Y/%m/%d %H:%M:%S")
     c.execute('''
         UPDATE tickets
-        SET reply = ?, status = 'answered', replied_time = ?, timeout_time = ?
-        WHERE id = ?
+        SET reply = %s, status = 'answered', replied_time = %s, timeout_time = %s
+        WHERE id = %s
     ''', (reply, now, timeout, ticket_id))
     conn.commit()
+    c.close()
     conn.close()
 
 
 def close_ticket(ticket_id):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
     c.execute('''
         UPDATE tickets
-        SET status = 'closed', closed_time = ?
-        WHERE id = ?
+        SET status = 'closed', closed_time = %s
+        WHERE id = %s
     ''', (now, ticket_id))
     conn.commit()
+    c.close()
     conn.close()
 
 
 def get_expired_tickets():
-    """تیکت‌هایی که تایم‌شان تمام شده"""
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
     c.execute('''
         SELECT id, ticket_code FROM tickets
         WHERE status IN ('waiting', 'taken', 'answered')
           AND timeout_time IS NOT NULL
-          AND timeout_time < ?
+          AND timeout_time < %s
     ''', (now,))
     rows = c.fetchall()
+    c.close()
     conn.close()
     return rows
 
 
 def add_ticket_message(ticket_id, sender_type, sender_id, message_id, content, file_id=None):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
     c.execute('''
         INSERT INTO ticket_messages (ticket_id, sender_type, sender_id, message_id, content, file_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
     ''', (ticket_id, sender_type, sender_id, message_id, content, file_id, now))
-    msg_id = c.lastrowid
+    msg_id = c.fetchone()[0]
     conn.commit()
+    c.close()
     conn.close()
     return msg_id
 
@@ -723,14 +762,15 @@ def add_ticket_message(ticket_id, sender_type, sender_id, message_id, content, f
 # ============================================
 
 def add_transaction(user_id, amount, card_number, transaction_id, status, type_):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
     c.execute('''
         INSERT INTO transactions (user_id, amount, card_number, transaction_id, status, type, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
     ''', (user_id, amount, card_number, transaction_id, status, type_, now))
     conn.commit()
+    c.close()
     conn.close()
 
 
@@ -739,41 +779,44 @@ def add_transaction(user_id, amount, card_number, transaction_id, status, type_)
 # ============================================
 
 def create_payment_record(user_id, authority, amount, description, card_id=None):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
     c.execute('''
         INSERT INTO payments (user_id, authority, amount, description, card_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
     ''', (user_id, authority, amount, description, card_id, now))
-    payment_id = c.lastrowid
+    payment_id = c.fetchone()[0]
     conn.commit()
+    c.close()
     conn.close()
     return payment_id
 
 
 def get_payment_by_authority(authority):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM payments WHERE authority = ?", (authority,))
+    c.execute("SELECT * FROM payments WHERE authority = %s", (authority,))
     p = c.fetchone()
+    c.close()
     conn.close()
     return p
 
 
 def update_payment_status(authority, status, ref_id=None, card_pan=None):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
     if status == 'verified':
         c.execute('''
             UPDATE payments
-            SET status = ?, ref_id = ?, card_pan = ?, verified_at = ?
-            WHERE authority = ?
+            SET status = %s, ref_id = %s, card_pan = %s, verified_at = %s
+            WHERE authority = %s
         ''', (status, ref_id, card_pan, now, authority))
     else:
-        c.execute("UPDATE payments SET status = ? WHERE authority = ?", (status, authority))
+        c.execute("UPDATE payments SET status = %s WHERE authority = %s", (status, authority))
     conn.commit()
+    c.close()
     conn.close()
 
 
@@ -782,7 +825,7 @@ def update_payment_status(authority, status, ref_id=None, card_pan=None):
 # ============================================
 
 def get_stats():
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
 
     c.execute("SELECT COUNT(*) FROM users")
@@ -812,6 +855,7 @@ def get_stats():
     c.execute("SELECT SUM(amount) FROM transactions WHERE status = 'success'")
     income = c.fetchone()[0] or 0
 
+    c.close()
     conn.close()
 
     return {
