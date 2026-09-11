@@ -44,9 +44,10 @@ SMSIR_API_KEY = "B33h8avj7PGBquAGfOXPLOw7LKYnmJNBXIN9XuxJLrfK0ojd"
 SMSIR_TEMPLATE_ID = 851804
 SMSIR_LINE_NUMBER = "30004505000017"
 
-# ---------- زیبال ----------
-ZIBAL_MERCHANT = os.environ.get("ZIBAL_MERCHANT", "zibal")
-ZIBAL_SANDBOX = True
+# ---------- زیبال (واقعی) ----------
+ZIBAL_MERCHANT = "69e3945ee6d570ad00fd0dad"
+ZIBAL_SANDBOX = False
+ZIBAL_CALLBACK_URL = "https://your-site.com/payment/callback"  # ⚠️ این رو تغییر بده
 
 # ---------- تایم لیمیت‌ها ----------
 TEACHER_TIMEOUT_MINUTES = 180

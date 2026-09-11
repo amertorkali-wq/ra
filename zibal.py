@@ -1,9 +1,9 @@
 import os
 import requests
 import time
-from config import ZIBAL_SANDBOX
+from config import ZIBAL_SANDBOX, ZIBAL_MERCHANT as CONFIG_MERCHANT, ZIBAL_CALLBACK_URL
 
-ZIBAL_MERCHANT = os.environ.get("ZIBAL_MERCHANT", "zibal")
+ZIBAL_MERCHANT = os.environ.get("ZIBAL_MERCHANT", CONFIG_MERCHANT)
 
 ZIBAL_BASE_URL = "https://gateway.zibal.ir"
 ZIBAL_REQUEST_URL = f"{ZIBAL_BASE_URL}/v1/request"
@@ -29,7 +29,6 @@ ZIBAL_RESULT_CODES = {
 
 
 def get_merchant():
-    """در حالت sandbox از zibal استفاده می‌کند"""
     if ZIBAL_SANDBOX:
         return "zibal"
     return ZIBAL_MERCHANT
@@ -48,7 +47,7 @@ def create_payment(amount, description, callback_url=None, mobile=None, order_id
     amount_rial = amount * 10
 
     if not callback_url:
-        callback_url = "https://violexq.ir/payment/callback"
+        callback_url = ZIBAL_CALLBACK_URL
 
     payload = {
         "merchant": merchant,
