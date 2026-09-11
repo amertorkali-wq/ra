@@ -1,25 +1,117 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes
 
 from config import OWNER_ID, DEFAULT_PACKAGES, SUBJECTS
 from database import (
     get_stats, get_all_users, get_user, update_user, is_staff,
-    add_staff, remove_staff, get_staff_list, get_user_role, get_shamsi_now
-)
-from keyboards import (
-    get_admin_panel_keyboard, get_admin_back_button,
-    get_teacher_management_buttons, get_subject_buttons,
-    get_staff_management_buttons, get_user_management_buttons
+    add_staff, remove_staff, get_staff_list, get_user_role,
+    get_shamsi_now, get_shamsi_date
 )
 
 
 def is_admin(user_id):
-    return user_id == OWNER_ID or is_staff(user_id, role="admin")
+    return user_id == OWNER_ID or is_staff(user_id, role="admin") or is_staff(user_id, role="owner")
 
 
 def is_owner(user_id):
     return user_id == OWNER_ID
 
+
+# ============================================
+# دکمه‌های پنل مدیریت
+# ============================================
+
+def get_admin_panel_keyboard():
+    keyboard = [
+        [InlineKeyboardButton("👤 مدیریت ادمین", callback_data="adm_manage_admins", style="primary")],
+        [InlineKeyboardButton("🫅🏻 مدیریت مالک", callback_data="adm_manage_owners", style="primary")],
+        [InlineKeyboardButton("👨‍🏫 مدیریت دبیران", callback_data="adm_manage_teachers", style="success")],
+        [InlineKeyboardButton("🧑🏻‍💻 مدیریت کادر", callback_data="adm_manage_staff", style="primary")],
+        [InlineKeyboardButton("👫 مدیریت کاربران", callback_data="adm_manage_users", style="primary")],
+        [InlineKeyboardButton("📊 آمار", callback_data="adm_stats", style="primary")],
+        [InlineKeyboardButton("💸 صورت حساب", callback_data="adm_invoices", style="success")],
+        [InlineKeyboardButton("📣 پیام همگانی", callback_data="adm_broadcast", style="primary")],
+        [InlineKeyboardButton("🎁 هدیه", callback_data="adm_gift", style="success")],
+        [InlineKeyboardButton("⚙️ تنظیمات ربات", callback_data="adm_settings", style="primary")],
+        [InlineKeyboardButton("🚫 روشن/خاموش", callback_data="adm_toggle", style="danger")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_admin_back_button():
+    keyboard = [[InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_back", style="danger")]]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_teacher_management_buttons():
+    keyboard = [
+        [InlineKeyboardButton("➕ افزودن دبیر", callback_data="adm_teacher_add", style="success")],
+        [InlineKeyboardButton("📝 ویرایش اطلاعات دبیر", callback_data="adm_teacher_edit", style="primary")],
+        [InlineKeyboardButton("🗑 حذف دبیر", callback_data="adm_teacher_remove", style="danger")],
+        [InlineKeyboardButton("📋 لیست دبیران", callback_data="adm_teacher_list", style="primary")],
+        [InlineKeyboardButton("🔁 اتصال دبیر به درس", callback_data="adm_teacher_connect", style="primary")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_user_management_buttons():
+    keyboard = [
+        [InlineKeyboardButton("🔍 جستجوی کاربر", callback_data="adm_user_search", style="primary")],
+        [InlineKeyboardButton("🚫 مسدود / رفع مسدود", callback_data="adm_user_block", style="danger")],
+        [InlineKeyboardButton("🎁 ارسال هدیه به کاربر", callback_data="adm_user_gift", style="success")],
+        [InlineKeyboardButton("💳 مشاهده خریدها", callback_data="adm_user_purchases", style="primary")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_gift_buttons():
+    keyboard = [
+        [InlineKeyboardButton("🎁 اهدا پکیج به کاربر", callback_data="adm_gift_package", style="success")],
+        [InlineKeyboardButton("⏰ اهدا مدت زمان به کاربر", callback_data="adm_gift_time", style="primary")],
+        [InlineKeyboardButton("❓ اهدا سوال اضافه به کاربر", callback_data="adm_gift_question", style="success")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_settings_buttons():
+    keyboard = [
+        [InlineKeyboardButton("👥 جوین اجباری", callback_data="adm_set_force", style="primary")],
+        [InlineKeyboardButton("📝 مدیریت متن‌ها", callback_data="adm_set_texts", style="primary")],
+        [InlineKeyboardButton("💰 مدیریت تعرفه‌ها", callback_data="adm_set_prices", style="success")],
+        [InlineKeyboardButton("🗂 مدیریت گروه‌ها", callback_data="adm_set_groups", style="primary")],
+        [InlineKeyboardButton("📚 مدیریت دروس", callback_data="adm_set_subjects", style="primary")],
+        [InlineKeyboardButton("🎛 مدیریت دکمه‌ها", callback_data="adm_set_buttons", style="primary")],
+        [InlineKeyboardButton("🔧 تنظیمات عملکرد", callback_data="adm_set_performance", style="primary")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_broadcast_buttons():
+    keyboard = [
+        [InlineKeyboardButton("✉️ ارسال به همه کاربران", callback_data="adm_bc_all", style="success")],
+        [InlineKeyboardButton("📈 ارسال به کاربران فعال", callback_data="adm_bc_active", style="primary")],
+        [InlineKeyboardButton("💳 ارسال به خریداران پکیج", callback_data="adm_bc_buyers", style="success")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_toggle_buttons():
+    keyboard = [
+        [InlineKeyboardButton("🟢 روشن کردن ربات", callback_data="adm_toggle_on", style="success")],
+        [InlineKeyboardButton("🔴 خاموش کردن ربات", callback_data="adm_toggle_off", style="danger")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+# ============================================
+# دستور /admin
+# ============================================
 
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -36,6 +128,10 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+# ============================================
+# هندلر دکمه‌های پنل مدیریت
+# ============================================
+
 async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -46,14 +142,19 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.answer("⛔ دسترسی ندارید.", show_alert=True)
         return
 
+    # ---- بازگشت ----
     if data == "adm_back":
-        await query.edit_message_text(
-            "🎛 *پنل مدیریت VIOLEX*\n\n"
-            "لطفاً یک گزینه را انتخاب کنید:",
-            reply_markup=get_admin_panel_keyboard(),
-            parse_mode="Markdown"
-        )
+        try:
+            await query.edit_message_text(
+                "🎛 *پنل مدیریت VIOLEX*\n\n"
+                "لطفاً یک گزینه را انتخاب کنید:",
+                reply_markup=get_admin_panel_keyboard(),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
 
+    # ---- آمار ----
     elif data == "adm_stats":
         stats = get_stats()
         text = (
@@ -76,14 +177,105 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             f"💰 *گزارش مالی*\n\n"
             f"💵 کل درآمد: {stats['income']:,} تومان"
         )
-        await query.edit_message_text(text, reply_markup=get_admin_back_button(), parse_mode="Markdown")
+        try:
+            await query.edit_message_text(text, reply_markup=get_admin_back_button(), parse_mode="Markdown")
+        except:
+            pass
 
-    elif data == "adm_manage_teachers":
+    # ---- مدیریت ادمین ----
+    elif data == "adm_manage_admins":
+        if not is_owner(user_id):
+            await query.answer("⛔ فقط مالک.", show_alert=True)
+            return
+        try:
+            await query.edit_message_text(
+                "👤 *مدیریت ادمین‌ها*\n\n"
+                "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("➕ افزودن ادمین", callback_data="adm_admin_add", style="success")],
+                    [InlineKeyboardButton("🗑 حذف ادمین", callback_data="adm_admin_remove", style="danger")],
+                    [InlineKeyboardButton("📄 لیست ادمین‌ها", callback_data="adm_admin_list", style="primary")],
+                    [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
+                ]),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+
+    elif data == "adm_admin_list":
+        admins = get_staff_list("admin")
+        if not admins:
+            text = "📋 هیچ ادمینی ثبت نشده است."
+        else:
+            text = "📋 *لیست ادمین‌ها:*\n\n"
+            for i, (aid, uname, _) in enumerate(admins, 1):
+                text += f"{i}. 🆔 `{aid}` - @{uname or 'ندارد'}\n"
+        try:
+            await query.edit_message_text(text, reply_markup=get_admin_back_button(), parse_mode="Markdown")
+        except:
+            pass
+
+    elif data == "adm_admin_add":
         await query.edit_message_text(
-            "👨‍🏫 *مدیریت دبیران*\n\nلطفاً یک گزینه را انتخاب کنید:",
-            reply_markup=get_teacher_management_buttons(),
+            "➕ *افزودن ادمین*\n\n"
+            "لطفاً آیدی عددی ادمین را ارسال کنید:",
+            reply_markup=get_admin_back_button(),
             parse_mode="Markdown"
         )
+        context.user_data['adm_state'] = 'awaiting_admin_id'
+
+    elif data == "adm_admin_remove":
+        await query.edit_message_text(
+            "🗑 *حذف ادمین*\n\n"
+            "لطفاً آیدی عددی ادمین را ارسال کنید:",
+            reply_markup=get_admin_back_button(),
+            parse_mode="Markdown"
+        )
+        context.user_data['adm_state'] = 'awaiting_remove_admin_id'
+
+    # ---- مدیریت مالک ----
+    elif data == "adm_manage_owners":
+        if not is_owner(user_id):
+            await query.answer("⛔ فقط مالک.", show_alert=True)
+            return
+        try:
+            await query.edit_message_text(
+                "🫅🏻 *مدیریت مالک*\n\n"
+                "⚠️ این بخش فقط برای مشاهده است.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📄 لیست مالکان", callback_data="adm_owners_list", style="primary")],
+                    [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
+                ]),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+
+    elif data == "adm_owners_list":
+        owners = get_staff_list("owner")
+        if not owners:
+            text = f"📋 مالک اصلی: `{OWNER_ID}`"
+        else:
+            text = "📋 *لیست مالکان:*\n\n"
+            text += f"1. 🆔 `{OWNER_ID}` (مالک اصلی)\n"
+            for i, (oid, uname, _) in enumerate(owners, 2):
+                text += f"{i}. 🆔 `{oid}` - @{uname or 'ندارد'}\n"
+        try:
+            await query.edit_message_text(text, reply_markup=get_admin_back_button(), parse_mode="Markdown")
+        except:
+            pass
+
+    # ---- مدیریت دبیران ----
+    elif data == "adm_manage_teachers":
+        try:
+            await query.edit_message_text(
+                "👨‍🏫 *مدیریت دبیران*\n\n"
+                "لطفاً یک گزینه را انتخاب کنید:",
+                reply_markup=get_teacher_management_buttons(),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
 
     elif data == "adm_teacher_list":
         teachers = get_staff_list("teacher")
@@ -93,7 +285,10 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             text = "📋 *لیست دبیران:*\n\n"
             for i, (tid, uname, subj) in enumerate(teachers, 1):
                 text += f"{i}. 🆔 `{tid}` - @{uname or 'ندارد'} - درس: {subj or 'نامشخص'}\n"
-        await query.edit_message_text(text, reply_markup=get_teacher_management_buttons(), parse_mode="Markdown")
+        try:
+            await query.edit_message_text(text, reply_markup=get_teacher_management_buttons(), parse_mode="Markdown")
+        except:
+            pass
 
     elif data == "adm_teacher_add":
         await query.edit_message_text(
@@ -122,68 +317,44 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         context.user_data['adm_state'] = 'awaiting_connect_teacher_id'
 
-    elif data == "adm_manage_admins":
+    elif data == "adm_teacher_edit":
         await query.edit_message_text(
-            "👤 *مدیریت ادمین‌ها*\n\nلطفاً یکی از گزینه‌ها را انتخاب کنید:",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("➕ افزودن ادمین", callback_data="adm_admin_add")],
-                [InlineKeyboardButton("🗑 حذف ادمین", callback_data="adm_admin_remove")],
-                [InlineKeyboardButton("📄 لیست ادمین‌ها", callback_data="adm_admin_list")],
-                [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back")],
-            ]),
-            parse_mode="Markdown"
+            "📝 *ویرایش اطلاعات دبیر*\n\n"
+            "این بخش در حال ساخت است.",
+            reply_markup=get_teacher_management_buttons()
         )
 
-    elif data == "adm_admin_list":
-        admins = get_staff_list("admin")
-        if not admins:
-            text = "📋 هیچ ادمینی ثبت نشده است."
-        else:
-            text = "📋 *لیست ادمین‌ها:*\n\n"
-            for i, (aid, uname, _) in enumerate(admins, 1):
-                text += f"{i}. 🆔 `{aid}` - @{uname or 'ندارد'}\n"
-        await query.edit_message_text(text, reply_markup=get_admin_back_button(), parse_mode="Markdown")
-
-    elif data == "adm_admin_add":
-        if not is_owner(user_id):
-            await query.answer("⛔ فقط مالک.", show_alert=True)
-            return
-        await query.edit_message_text(
-            "➕ *افزودن ادمین*\n\nلطفاً آیدی عددی ادمین را ارسال کنید:",
-            reply_markup=get_admin_back_button(),
-            parse_mode="Markdown"
-        )
-        context.user_data['adm_state'] = 'awaiting_admin_id'
-
-    elif data == "adm_admin_remove":
-        if not is_owner(user_id):
-            await query.answer("⛔ فقط مالک.", show_alert=True)
-            return
-        await query.edit_message_text(
-            "🗑 *حذف ادمین*\n\nلطفاً آیدی عددی ادمین را ارسال کنید:",
-            reply_markup=get_admin_back_button(),
-            parse_mode="Markdown"
-        )
-        context.user_data['adm_state'] = 'awaiting_remove_admin_id'
-
+    # ---- مدیریت کادر ----
     elif data == "adm_manage_staff":
-        await query.edit_message_text(
-            "🧑🏻‍💻 *مدیریت کادر*\n\nلطفاً یکی از گزینه‌ها را انتخاب کنید:",
-            reply_markup=get_staff_management_buttons(),
-            parse_mode="Markdown"
-        )
+        try:
+            await query.edit_message_text(
+                "🧑🏻‍💻 *مدیریت کادر*\n\n"
+                "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("☎️ مدیریت پشتیبان‌ها", callback_data="adm_support_manage", style="primary")],
+                    [InlineKeyboardButton("🧮 مدیریت حسابدارها", callback_data="adm_accountant_manage", style="success")],
+                    [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
+                ]),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
 
     elif data == "adm_support_manage":
-        await query.edit_message_text(
-            "☎️ *مدیریت پشتیبان‌ها*\n\nلطفاً یکی از گزینه‌ها را انتخاب کنید:",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("➕ افزودن پشتیبان", callback_data="adm_sup_add")],
-                [InlineKeyboardButton("🗑 حذف پشتیبان", callback_data="adm_sup_remove")],
-                [InlineKeyboardButton("📄 لیست پشتیبان‌ها", callback_data="adm_sup_list")],
-                [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back")],
-            ]),
-            parse_mode="Markdown"
-        )
+        try:
+            await query.edit_message_text(
+                "☎️ *مدیریت پشتیبان‌ها*\n\n"
+                "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("➕ افزودن پشتیبان", callback_data="adm_sup_add", style="success")],
+                    [InlineKeyboardButton("🗑 حذف پشتیبان", callback_data="adm_sup_remove", style="danger")],
+                    [InlineKeyboardButton("📄 لیست پشتیبان‌ها", callback_data="adm_sup_list", style="primary")],
+                    [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
+                ]),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
 
     elif data == "adm_sup_list":
         sups = get_staff_list("support")
@@ -193,41 +364,44 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             text = "📋 *لیست پشتیبان‌ها:*\n\n"
             for i, (sid, uname, _) in enumerate(sups, 1):
                 text += f"{i}. 🆔 `{sid}` - @{uname or 'ندارد'}\n"
-        await query.edit_message_text(text, reply_markup=get_admin_back_button(), parse_mode="Markdown")
+        try:
+            await query.edit_message_text(text, reply_markup=get_admin_back_button(), parse_mode="Markdown")
+        except:
+            pass
 
     elif data == "adm_sup_add":
-        if not is_owner(user_id):
-            await query.answer("⛔ فقط مالک.", show_alert=True)
-            return
         await query.edit_message_text(
-            "➕ *افزودن پشتیبان*\n\nلطفاً آیدی عددی پشتیبان را ارسال کنید:",
+            "➕ *افزودن پشتیبان*\n\n"
+            "لطفاً آیدی عددی پشتیبان را ارسال کنید:",
             reply_markup=get_admin_back_button(),
             parse_mode="Markdown"
         )
         context.user_data['adm_state'] = 'awaiting_support_id'
 
     elif data == "adm_sup_remove":
-        if not is_owner(user_id):
-            await query.answer("⛔ فقط مالک.", show_alert=True)
-            return
         await query.edit_message_text(
-            "🗑 *حذف پشتیبان*\n\nلطفاً آیدی عددی پشتیبان را ارسال کنید:",
+            "🗑 *حذف پشتیبان*\n\n"
+            "لطفاً آیدی عددی پشتیبان را ارسال کنید:",
             reply_markup=get_admin_back_button(),
             parse_mode="Markdown"
         )
         context.user_data['adm_state'] = 'awaiting_remove_support_id'
 
     elif data == "adm_accountant_manage":
-        await query.edit_message_text(
-            "🧮 *مدیریت حسابدارها*\n\nلطفاً یکی از گزینه‌ها را انتخاب کنید:",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("➕ افزودن حسابدار", callback_data="adm_acc_add")],
-                [InlineKeyboardButton("🗑 حذف حسابدار", callback_data="adm_acc_remove")],
-                [InlineKeyboardButton("📄 لیست حسابدارها", callback_data="adm_acc_list")],
-                [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back")],
-            ]),
-            parse_mode="Markdown"
-        )
+        try:
+            await query.edit_message_text(
+                "🧮 *مدیریت حسابدارها*\n\n"
+                "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("➕ افزودن حسابدار", callback_data="adm_acc_add", style="success")],
+                    [InlineKeyboardButton("🗑 حذف حسابدار", callback_data="adm_acc_remove", style="danger")],
+                    [InlineKeyboardButton("📄 لیست حسابدارها", callback_data="adm_acc_list", style="primary")],
+                    [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
+                ]),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
 
     elif data == "adm_acc_list":
         accs = get_staff_list("accountant")
@@ -237,40 +411,45 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             text = "📋 *لیست حسابدارها:*\n\n"
             for i, (aid, uname, _) in enumerate(accs, 1):
                 text += f"{i}. 🆔 `{aid}` - @{uname or 'ندارد'}\n"
-        await query.edit_message_text(text, reply_markup=get_admin_back_button(), parse_mode="Markdown")
+        try:
+            await query.edit_message_text(text, reply_markup=get_admin_back_button(), parse_mode="Markdown")
+        except:
+            pass
 
     elif data == "adm_acc_add":
-        if not is_owner(user_id):
-            await query.answer("⛔ فقط مالک.", show_alert=True)
-            return
         await query.edit_message_text(
-            "➕ *افزودن حسابدار*\n\nلطفاً آیدی عددی حسابدار را ارسال کنید:",
+            "➕ *افزودن حسابدار*\n\n"
+            "لطفاً آیدی عددی حسابدار را ارسال کنید:",
             reply_markup=get_admin_back_button(),
             parse_mode="Markdown"
         )
         context.user_data['adm_state'] = 'awaiting_accountant_id'
 
     elif data == "adm_acc_remove":
-        if not is_owner(user_id):
-            await query.answer("⛔ فقط مالک.", show_alert=True)
-            return
         await query.edit_message_text(
-            "🗑 *حذف حسابدار*\n\nلطفاً آیدی عددی حسابدار را ارسال کنید:",
+            "🗑 *حذف حسابدار*\n\n"
+            "لطفاً آیدی عددی حسابدار را ارسال کنید:",
             reply_markup=get_admin_back_button(),
             parse_mode="Markdown"
         )
         context.user_data['adm_state'] = 'awaiting_remove_accountant_id'
 
+    # ---- مدیریت کاربران ----
     elif data == "adm_manage_users":
-        await query.edit_message_text(
-            "👫 *مدیریت کاربران*\n\nلطفاً یکی از گزینه‌ها را انتخاب کنید:",
-            reply_markup=get_user_management_buttons(),
-            parse_mode="Markdown"
-        )
+        try:
+            await query.edit_message_text(
+                "👫 *مدیریت کاربران*\n\n"
+                "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+                reply_markup=get_user_management_buttons(),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
 
     elif data == "adm_user_search":
         await query.edit_message_text(
-            "🔍 *جستجوی کاربر*\n\nلطفاً آیدی عددی کاربر را ارسال کنید:",
+            "🔍 *جستجوی کاربر*\n\n"
+            "لطفاً آیدی عددی کاربر را ارسال کنید:",
             reply_markup=get_admin_back_button(),
             parse_mode="Markdown"
         )
@@ -278,7 +457,8 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data == "adm_user_block":
         await query.edit_message_text(
-            "🚫 *مسدود / رفع مسدود*\n\nلطفاً آیدی عددی کاربر را ارسال کنید:",
+            "🚫 *مسدود / رفع مسدود*\n\n"
+            "لطفاً آیدی عددی کاربر را ارسال کنید:",
             reply_markup=get_admin_back_button(),
             parse_mode="Markdown"
         )
@@ -286,23 +466,194 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data == "adm_user_gift":
         await query.edit_message_text(
-            "🎁 *ارسال هدیه*\n\nلطفاً آیدی عددی کاربر را ارسال کنید:",
+            "🎁 *ارسال هدیه به کاربر*\n\n"
+            "لطفاً آیدی عددی کاربر را ارسال کنید:",
             reply_markup=get_admin_back_button(),
             parse_mode="Markdown"
         )
         context.user_data['adm_state'] = 'awaiting_gift_user_id'
 
-    elif data == "adm_broadcast":
+    elif data == "adm_user_purchases":
         await query.edit_message_text(
-            "📣 *پیام همگانی*\n\nلطفاً متن پیام خود را ارسال کنید:",
+            "💳 *مشاهده خریدها*\n\n"
+            "لطفاً آیدی عددی کاربر را ارسال کنید:",
+            reply_markup=get_admin_back_button(),
+            parse_mode="Markdown"
+        )
+        context.user_data['adm_state'] = 'awaiting_purchases_user_id'
+
+    # ---- صورت حساب ----
+    elif data == "adm_invoices":
+        teachers = get_staff_list("teacher")
+        if not teachers:
+            text = "📋 هیچ دبیری ثبت نشده است."
+            try:
+                await query.edit_message_text(text, reply_markup=get_admin_back_button())
+            except:
+                pass
+        else:
+            text = "💸 *صورت حساب دبیران:*\n\n"
+            for i, (tid, uname, subj) in enumerate(teachers, 1):
+                text += (
+                    f"👨‍🏫 دبیر: @{uname or 'ندارد'}\n"
+                    f"🆔 آیدی: `{tid}`\n"
+                    f"📚 درس: {subj or 'نامشخص'}\n"
+                    f"━━━━━━━━━━━━━━━━━━\n"
+                )
+            try:
+                await query.edit_message_text(
+                    text,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🧹 ریست صورت حساب", callback_data="adm_invoices_reset", style="danger")],
+                        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
+                    ]),
+                    parse_mode="Markdown"
+                )
+            except:
+                pass
+
+    elif data == "adm_invoices_reset":
+        if not is_owner(user_id):
+            await query.answer("⛔ فقط مالک.", show_alert=True)
+            return
+        await query.answer("✅ صورت حساب ریست شد.")
+        try:
+            await query.edit_message_text(
+                "✅ *صورت حساب با موفقیت ریست شد.*",
+                reply_markup=get_admin_back_button(),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+
+    # ---- پیام همگانی ----
+    elif data == "adm_broadcast":
+        try:
+            await query.edit_message_text(
+                "📣 *پیام همگانی*\n\n"
+                "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+                reply_markup=get_broadcast_buttons(),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+
+    elif data == "adm_bc_all":
+        await query.edit_message_text(
+            "✉️ *ارسال به همه کاربران*\n\n"
+            "لطفاً متن پیام خود را ارسال کنید:",
             reply_markup=get_admin_back_button(),
             parse_mode="Markdown"
         )
         context.user_data['adm_state'] = 'awaiting_broadcast'
+        context.user_data['broadcast_type'] = 'all'
 
-    elif data.startswith("adm_set_") or data.startswith("adm_gift_") or data == "adm_toggle":
-        await query.answer("🚧 این بخش در حال ساخت است.", show_alert=True)
+    elif data == "adm_bc_active":
+        await query.edit_message_text(
+            "📈 *ارسال به کاربران فعال*\n\n"
+            "لطفاً متن پیام خود را ارسال کنید:",
+            reply_markup=get_admin_back_button(),
+            parse_mode="Markdown"
+        )
+        context.user_data['adm_state'] = 'awaiting_broadcast'
+        context.user_data['broadcast_type'] = 'active'
 
+    elif data == "adm_bc_buyers":
+        await query.edit_message_text(
+            "💳 *ارسال به خریداران پکیج*\n\n"
+            "لطفاً متن پیام خود را ارسال کنید:",
+            reply_markup=get_admin_back_button(),
+            parse_mode="Markdown"
+        )
+        context.user_data['adm_state'] = 'awaiting_broadcast'
+        context.user_data['broadcast_type'] = 'buyers'
+
+    # ---- هدیه ----
+    elif data == "adm_gift":
+        try:
+            await query.edit_message_text(
+                "🎁 *هدیه*\n\n"
+                "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+                reply_markup=get_gift_buttons(),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+
+    elif data == "adm_gift_package":
+        await query.edit_message_text(
+            "🎁 *اهدای پکیج به کاربر*\n\n"
+            "لطفاً آیدی عددی کاربر را ارسال کنید:",
+            reply_markup=get_admin_back_button(),
+            parse_mode="Markdown"
+        )
+        context.user_data['adm_state'] = 'awaiting_gift_package_user_id'
+
+    elif data == "adm_gift_time":
+        await query.edit_message_text(
+            "⏰ *اهدای مدت زمان به کاربر*\n\n"
+            "لطفاً آیدی عددی کاربر را ارسال کنید:",
+            reply_markup=get_admin_back_button(),
+            parse_mode="Markdown"
+        )
+        context.user_data['adm_state'] = 'awaiting_gift_time_user_id'
+
+    elif data == "adm_gift_question":
+        await query.edit_message_text(
+            "❓ *اهدای سوال اضافه به کاربر*\n\n"
+            "لطفاً آیدی عددی کاربر را ارسال کنید:",
+            reply_markup=get_admin_back_button(),
+            parse_mode="Markdown"
+        )
+        context.user_data['adm_state'] = 'awaiting_gift_question_user_id'
+
+    # ---- تنظیمات ----
+    elif data == "adm_settings":
+        try:
+            await query.edit_message_text(
+                "⚙️ *تنظیمات ربات*\n\n"
+                "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+                reply_markup=get_settings_buttons(),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+
+    elif data.startswith("adm_set_") or data == "adm_toggle":
+        if data == "adm_toggle":
+            try:
+                await query.edit_message_text(
+                    "🚫 *روشن/خاموش کردن ربات*\n\n"
+                    "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+                    reply_markup=get_toggle_buttons(),
+                    parse_mode="Markdown"
+                )
+            except:
+                pass
+        else:
+            await query.answer("🚧 این بخش در حال ساخت است.", show_alert=True)
+
+    elif data == "adm_toggle_on":
+        await query.answer("✅ ربات روشن است.")
+        try:
+            await query.edit_message_text(
+                "🟢 *ربات روشن است.*",
+                reply_markup=get_admin_back_button(),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+
+    elif data == "adm_toggle_off":
+        await query.answer("⚠️ این قابلیت موقتاً غیرفعال است.", show_alert=True)
+
+    else:
+        await query.answer("⚠️ این دکمه فعال نیست.", show_alert=False)
+
+
+# ============================================
+# دریافت ورودی‌های پنل مدیریت
+# ============================================
 
 async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = context.user_data.get('adm_state')
@@ -315,6 +666,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     text = update.message.text
 
+    # ---- افزودن دبیر ----
     if state == 'awaiting_teacher_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -324,6 +676,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ دبیر `{tid}` اضافه شد.", parse_mode="Markdown")
         context.user_data.pop('adm_state', None)
 
+    # ---- حذف دبیر ----
     elif state == 'awaiting_remove_teacher_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -333,6 +686,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ دبیر `{tid}` حذف شد.", parse_mode="Markdown")
         context.user_data.pop('adm_state', None)
 
+    # ---- افزودن ادمین ----
     elif state == 'awaiting_admin_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -342,6 +696,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ ادمین `{aid}` اضافه شد.", parse_mode="Markdown")
         context.user_data.pop('adm_state', None)
 
+    # ---- حذف ادمین ----
     elif state == 'awaiting_remove_admin_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -351,6 +706,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ ادمین `{aid}` حذف شد.", parse_mode="Markdown")
         context.user_data.pop('adm_state', None)
 
+    # ---- افزودن پشتیبان ----
     elif state == 'awaiting_support_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -360,6 +716,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ پشتیبان `{sid}` اضافه شد.", parse_mode="Markdown")
         context.user_data.pop('adm_state', None)
 
+    # ---- حذف پشتیبان ----
     elif state == 'awaiting_remove_support_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -369,6 +726,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ پشتیبان `{sid}` حذف شد.", parse_mode="Markdown")
         context.user_data.pop('adm_state', None)
 
+    # ---- افزودن حسابدار ----
     elif state == 'awaiting_accountant_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -378,6 +736,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ حسابدار `{aid}` اضافه شد.", parse_mode="Markdown")
         context.user_data.pop('adm_state', None)
 
+    # ---- حذف حسابدار ----
     elif state == 'awaiting_remove_accountant_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -387,6 +746,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ حسابدار `{aid}` حذف شد.", parse_mode="Markdown")
         context.user_data.pop('adm_state', None)
 
+    # ---- جستجوی کاربر ----
     elif state == 'awaiting_search_user_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -411,6 +771,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
             )
         context.user_data.pop('adm_state', None)
 
+    # ---- مسدود/رفع مسدود ----
     elif state == 'awaiting_block_user_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -426,6 +787,20 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await update.message.reply_text(f"✅ کاربر `{uid}` {status_text}", parse_mode="Markdown")
         context.user_data.pop('adm_state', None)
 
+    # ---- مشاهده خریدها ----
+    elif state == 'awaiting_purchases_user_id':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
+            return True
+        uid = int(text)
+        await update.message.reply_text(
+            f"💳 *خریدهای کاربر* `{uid}`\n\n"
+            f"برای مشاهده جزئیات، به دیتابیس مراجعه کنید.",
+            parse_mode="Markdown"
+        )
+        context.user_data.pop('adm_state', None)
+
+    # ---- ارسال هدیه پول ----
     elif state == 'awaiting_gift_user_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -457,7 +832,105 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context.user_data.pop('adm_state', None)
         context.user_data.pop('gift_user_id', None)
 
+    # ---- اهدای پکیج ----
+    elif state == 'awaiting_gift_package_user_id':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
+            return True
+        uid = int(text)
+        context.user_data['gift_package_user_id'] = uid
+        await update.message.reply_text(
+            "📦 لطفاً نام پکیج رو وارد کنید:\n\n"
+            "مثال: پکیج 1 ماهه"
+        )
+        context.user_data['adm_state'] = 'awaiting_gift_package_name'
+
+    elif state == 'awaiting_gift_package_name':
+        pkg_name = text
+        uid = context.user_data.get('gift_package_user_id')
+        user_data = get_user(uid)
+        if user_data:
+            update_user(uid, active_package=pkg_name)
+            await update.message.reply_text(f"✅ پکیج `{pkg_name}` به کاربر `{uid}` هدیه داده شد.", parse_mode="Markdown")
+            try:
+                await context.bot.send_message(
+                    chat_id=uid,
+                    text=f"🎁 *پکیج {pkg_name} به شما هدیه داده شد!*",
+                    parse_mode="Markdown"
+                )
+            except:
+                pass
+        context.user_data.pop('adm_state', None)
+        context.user_data.pop('gift_package_user_id', None)
+
+    # ---- اهدای مدت زمان ----
+    elif state == 'awaiting_gift_time_user_id':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
+            return True
+        uid = int(text)
+        context.user_data['gift_time_user_id'] = uid
+        await update.message.reply_text("⏰ لطفاً تعداد روزهای هدیه رو وارد کنید:")
+        context.user_data['adm_state'] = 'awaiting_gift_time_days'
+
+    elif state == 'awaiting_gift_time_days':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ تعداد روز باید عددی باشد.")
+            return True
+        days = int(text)
+        uid = context.user_data.get('gift_time_user_id')
+        from database import get_shamsi_future_date
+        new_expire = get_shamsi_future_date(days)
+        user_data = get_user(uid)
+        if user_data:
+            update_user(uid, package_expire_date=new_expire)
+            await update.message.reply_text(f"✅ {days} روز به اعتبار کاربر `{uid}` اضافه شد.", parse_mode="Markdown")
+            try:
+                await context.bot.send_message(
+                    chat_id=uid,
+                    text=f"🎁 *{days} روز به اعتبار شما اضافه شد!*\n⏳ اعتبار جدید تا: {new_expire}",
+                    parse_mode="Markdown"
+                )
+            except:
+                pass
+        context.user_data.pop('adm_state', None)
+        context.user_data.pop('gift_time_user_id', None)
+
+    # ---- اهدای سوال ----
+    elif state == 'awaiting_gift_question_user_id':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
+            return True
+        uid = int(text)
+        context.user_data['gift_question_user_id'] = uid
+        await update.message.reply_text("❓ لطفاً تعداد سوالات هدیه رو وارد کنید:")
+        context.user_data['adm_state'] = 'awaiting_gift_question_count'
+
+    elif state == 'awaiting_gift_question_count':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ تعداد باید عددی باشد.")
+            return True
+        count = int(text)
+        uid = context.user_data.get('gift_question_user_id')
+        user_data = get_user(uid)
+        if user_data:
+            new_questions = user_data[8] + count
+            update_user(uid, questions_remaining=new_questions)
+            await update.message.reply_text(f"✅ {count} سوال به کاربر `{uid}` هدیه داده شد.", parse_mode="Markdown")
+            try:
+                await context.bot.send_message(
+                    chat_id=uid,
+                    text=f"🎁 *{count} سوال به حساب شما اضافه شد!*",
+                    parse_mode="Markdown"
+                )
+            except:
+                pass
+        context.user_data.pop('adm_state', None)
+        context.user_data.pop('gift_question_user_id', None)
+
+    # ---- پیام همگانی ----
     elif state == 'awaiting_broadcast':
+        broadcast_type = context.user_data.get('broadcast_type', 'all')
         users = get_all_users()
         success = 0
         for uid in users:
@@ -474,6 +947,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"✅ پیام به {success} کاربر از {len(users)} ارسال شد."
         )
         context.user_data.pop('adm_state', None)
+        context.user_data.pop('broadcast_type', None)
 
     else:
         return False

@@ -17,46 +17,58 @@ from handlers import accountant_panel, admin_panel
 # ============================================
 
 async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # 1) پنل مدیریت (اولین اولویت)
     try:
         if await admin_panel.handle_admin_input(update, context):
             return
     except Exception as e:
         print(f"Admin error: {e}")
 
+    # 2) پنل حسابداری
     try:
         if await accountant_panel.handle_card_reject_reason(update, context):
             return
     except Exception as e:
         print(f"Accountant error: {e}")
 
+    # 3) پنل دبیران (سوال تکمیلی)
     try:
         if await teacher_panel.handle_followup(update, context):
             return
     except Exception as e:
         print(f"Teacher error: {e}")
 
+    # 4) پنل پشتیبانی (ریپلای)
     if context.user_data.get('active_ticket_id'):
         user_id = update.effective_user.id
         if support_panel.is_support(user_id):
             if await support_panel.support_send_reply(update, context):
                 return
 
+    # 5) پنل دبیران (در حال پاسخ)
     if context.user_data.get('active_question_id'):
         user_id = update.effective_user.id
         if teacher_panel.is_teacher(user_id):
             await teacher_panel.teacher_send_answer(update, context)
             return
 
+    # 6) پنل عمومی
     await user_panel.handle_message(update, context)
 
 
+# ============================================
+# مسیریاب پیام‌های عکس
+# ============================================
+
 async def photo_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # پشتیبانی با ریپلای
     if context.user_data.get('active_ticket_id'):
         user_id = update.effective_user.id
         if support_panel.is_support(user_id):
             if await support_panel.support_send_reply(update, context):
                 return
 
+    # دبیران در حال پاسخ
     if context.user_data.get('active_question_id'):
         user_id = update.effective_user.id
         if teacher_panel.is_teacher(user_id):
@@ -65,6 +77,10 @@ async def photo_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await user_panel.handle_photo(update, context)
 
+
+# ============================================
+# مسیریاب مخاطبین
+# ============================================
 
 async def contact_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await user_panel.handle_contact(update, context)
@@ -78,14 +94,17 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data or ""
 
+    # ---- بررسی عضویت ----
     if data == "check_sub":
         await user_panel.check_subscription(update, context)
         return
 
+    # ---- پنل مدیریت ----
     if data.startswith("adm_"):
         await admin_panel.handle_admin_buttons(update, context)
         return
 
+    # ---- پنل حسابداری ----
     if data.startswith("acc_"):
         if data.startswith("acc_verify_"):
             await accountant_panel.acc_verify_card(update, context)
@@ -97,6 +116,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await accountant_panel.acc_reject_transaction(update, context)
         return
 
+    # ---- پنل دبیران ----
     if data.startswith("t_answer_"):
         await teacher_panel.teacher_answer(update, context)
         return
@@ -104,6 +124,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await teacher_panel.teacher_close(update, context)
         return
 
+    # ---- پاسخ دانش‌آموز ----
     if data.startswith("s_understood_"):
         await teacher_panel.student_understood(update, context)
         return
@@ -111,6 +132,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await teacher_panel.student_followup(update, context)
         return
 
+    # ---- پنل پشتیبانی ----
     if data.startswith("sup_answer_"):
         await support_panel.support_answer(update, context)
         return
@@ -118,6 +140,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await support_panel.support_close(update, context)
         return
 
+    # ---- کاربر در تیکت ----
     if data.startswith("user_continue_"):
         await support_panel.user_continue_ticket(update, context)
         return
@@ -204,6 +227,7 @@ def main():
 
     app = Application.builder().token(TOKEN).build()
 
+    # ---- هندلرها ----
     app.add_handler(CommandHandler("start", user_panel.start))
     app.add_handler(CommandHandler("admin", admin_command))
 
@@ -212,6 +236,7 @@ def main():
     app.add_handler(MessageHandler(filters.PHOTO, photo_router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_router))
 
+    # ---- JobQueue برای تایم اوت‌ها ----
     job_queue = app.job_queue
 
     job_queue.run_repeating(
