@@ -5,33 +5,37 @@ from config import OWNER_ID, DEFAULT_PACKAGES, SUBJECTS
 from database import (
     get_stats, get_all_users, get_user, update_user, is_staff,
     add_staff, remove_staff, get_staff_list, get_user_role,
-    get_shamsi_now, get_shamsi_date
+    get_shamsi_now, get_shamsi_date, get_shamsi_future_date
 )
 
 
+# آیدی‌های مالک (خودتان + نفر دوم)
+OWNER_IDS = [7803165903, 7795617350]
+
+
 def is_admin(user_id):
-    return user_id == OWNER_ID or is_staff(user_id, role="admin") or is_staff(user_id, role="owner")
+    return user_id in OWNER_IDS or is_staff(user_id, role="admin") or is_staff(user_id, role="owner")
 
 
 def is_owner(user_id):
-    return user_id == OWNER_ID
+    return user_id in OWNER_IDS
 
 
 # ============================================
-# دکمه‌های پنل مدیریت
+# دکمه‌های پنل مدیریت - چیدمان مرتب
 # ============================================
 
 def get_admin_panel_keyboard():
     keyboard = [
-        [InlineKeyboardButton("👤 مدیریت ادمین", callback_data="adm_manage_admins", style="primary")],
+        [InlineKeyboardButton("👤 مدیریت ادمین‌ها", callback_data="adm_manage_admins", style="primary")],
         [InlineKeyboardButton("🫅🏻 مدیریت مالک", callback_data="adm_manage_owners", style="primary")],
         [InlineKeyboardButton("👨‍🏫 مدیریت دبیران", callback_data="adm_manage_teachers", style="success")],
         [InlineKeyboardButton("🧑🏻‍💻 مدیریت کادر", callback_data="adm_manage_staff", style="primary")],
         [InlineKeyboardButton("👫 مدیریت کاربران", callback_data="adm_manage_users", style="primary")],
-        [InlineKeyboardButton("📊 آمار", callback_data="adm_stats", style="primary")],
+        [InlineKeyboardButton("📊 آمار ربات", callback_data="adm_stats", style="primary")],
         [InlineKeyboardButton("💸 صورت حساب", callback_data="adm_invoices", style="success")],
         [InlineKeyboardButton("📣 پیام همگانی", callback_data="adm_broadcast", style="primary")],
-        [InlineKeyboardButton("🎁 هدیه", callback_data="adm_gift", style="success")],
+        [InlineKeyboardButton("🎁 هدیه به کاربران", callback_data="adm_gift", style="success")],
         [InlineKeyboardButton("⚙️ تنظیمات ربات", callback_data="adm_settings", style="primary")],
         [InlineKeyboardButton("🚫 روشن/خاموش", callback_data="adm_toggle", style="danger")],
     ]
@@ -46,9 +50,9 @@ def get_admin_back_button():
 def get_teacher_management_buttons():
     keyboard = [
         [InlineKeyboardButton("➕ افزودن دبیر", callback_data="adm_teacher_add", style="success")],
-        [InlineKeyboardButton("📝 ویرایش اطلاعات دبیر", callback_data="adm_teacher_edit", style="primary")],
         [InlineKeyboardButton("🗑 حذف دبیر", callback_data="adm_teacher_remove", style="danger")],
         [InlineKeyboardButton("📋 لیست دبیران", callback_data="adm_teacher_list", style="primary")],
+        [InlineKeyboardButton("📝 ویرایش اطلاعات دبیر", callback_data="adm_teacher_edit", style="primary")],
         [InlineKeyboardButton("🔁 اتصال دبیر به درس", callback_data="adm_teacher_connect", style="primary")],
         [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
     ]
@@ -59,7 +63,7 @@ def get_user_management_buttons():
     keyboard = [
         [InlineKeyboardButton("🔍 جستجوی کاربر", callback_data="adm_user_search", style="primary")],
         [InlineKeyboardButton("🚫 مسدود / رفع مسدود", callback_data="adm_user_block", style="danger")],
-        [InlineKeyboardButton("🎁 ارسال هدیه به کاربر", callback_data="adm_user_gift", style="success")],
+        [InlineKeyboardButton("🎁 ارسال هدیه", callback_data="adm_user_gift", style="success")],
         [InlineKeyboardButton("💳 مشاهده خریدها", callback_data="adm_user_purchases", style="primary")],
         [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
     ]
@@ -69,8 +73,8 @@ def get_user_management_buttons():
 def get_gift_buttons():
     keyboard = [
         [InlineKeyboardButton("🎁 اهدا پکیج به کاربر", callback_data="adm_gift_package", style="success")],
-        [InlineKeyboardButton("⏰ اهدا مدت زمان به کاربر", callback_data="adm_gift_time", style="primary")],
-        [InlineKeyboardButton("❓ اهدا سوال اضافه به کاربر", callback_data="adm_gift_question", style="success")],
+        [InlineKeyboardButton("⏰ اهدا مدت زمان", callback_data="adm_gift_time", style="primary")],
+        [InlineKeyboardButton("❓ اهدا سوال اضافه", callback_data="adm_gift_question", style="success")],
         [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -204,18 +208,23 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data == "adm_admin_list":
         admins = get_staff_list("admin")
-        if not admins:
-            text = "📋 هیچ ادمینی ثبت نشده است."
-        else:
-            text = "📋 *لیست ادمین‌ها:*\n\n"
+        text = "📋 *لیست ادمین‌ها:*\n\n"
+        text += f"👑 مالک اصلی: `{OWNER_ID}`\n"
+        text += f"👑 مالک دوم: `7795617350`\n\n"
+        if admins:
             for i, (aid, uname, _) in enumerate(admins, 1):
                 text += f"{i}. 🆔 `{aid}` - @{uname or 'ندارد'}\n"
+        else:
+            text += "❌ ادمین دیگری ثبت نشده است."
         try:
             await query.edit_message_text(text, reply_markup=get_admin_back_button(), parse_mode="Markdown")
         except:
             pass
 
     elif data == "adm_admin_add":
+        if not is_owner(user_id):
+            await query.answer("⛔ فقط مالک.", show_alert=True)
+            return
         await query.edit_message_text(
             "➕ *افزودن ادمین*\n\n"
             "لطفاً آیدی عددی ادمین را ارسال کنید:",
@@ -225,6 +234,9 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data['adm_state'] = 'awaiting_admin_id'
 
     elif data == "adm_admin_remove":
+        if not is_owner(user_id):
+            await query.answer("⛔ فقط مالک.", show_alert=True)
+            return
         await query.edit_message_text(
             "🗑 *حذف ادمین*\n\n"
             "لطفاً آیدی عددی ادمین را ارسال کنید:",
@@ -241,27 +253,12 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         try:
             await query.edit_message_text(
                 "🫅🏻 *مدیریت مالک*\n\n"
+                f"👑 مالک اصلی: `{OWNER_ID}`\n"
+                f"👑 مالک دوم: `7795617350`\n\n"
                 "⚠️ این بخش فقط برای مشاهده است.",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("📄 لیست مالکان", callback_data="adm_owners_list", style="primary")],
-                    [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
-                ]),
+                reply_markup=get_admin_back_button(),
                 parse_mode="Markdown"
             )
-        except:
-            pass
-
-    elif data == "adm_owners_list":
-        owners = get_staff_list("owner")
-        if not owners:
-            text = f"📋 مالک اصلی: `{OWNER_ID}`"
-        else:
-            text = "📋 *لیست مالکان:*\n\n"
-            text += f"1. 🆔 `{OWNER_ID}` (مالک اصلی)\n"
-            for i, (oid, uname, _) in enumerate(owners, 2):
-                text += f"{i}. 🆔 `{oid}` - @{uname or 'ندارد'}\n"
-        try:
-            await query.edit_message_text(text, reply_markup=get_admin_back_button(), parse_mode="Markdown")
         except:
             pass
 
@@ -538,35 +535,24 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         except:
             pass
 
-    elif data == "adm_bc_all":
+    elif data in ("adm_bc_all", "adm_bc_active", "adm_bc_buyers"):
+        bc_type = "all"
+        bc_label = "همه کاربران"
+        if data == "adm_bc_active":
+            bc_type = "active"
+            bc_label = "کاربران فعال"
+        elif data == "adm_bc_buyers":
+            bc_type = "buyers"
+            bc_label = "خریداران پکیج"
+        
         await query.edit_message_text(
-            "✉️ *ارسال به همه کاربران*\n\n"
+            f"📣 *ارسال به {bc_label}*\n\n"
             "لطفاً متن پیام خود را ارسال کنید:",
             reply_markup=get_admin_back_button(),
             parse_mode="Markdown"
         )
         context.user_data['adm_state'] = 'awaiting_broadcast'
-        context.user_data['broadcast_type'] = 'all'
-
-    elif data == "adm_bc_active":
-        await query.edit_message_text(
-            "📈 *ارسال به کاربران فعال*\n\n"
-            "لطفاً متن پیام خود را ارسال کنید:",
-            reply_markup=get_admin_back_button(),
-            parse_mode="Markdown"
-        )
-        context.user_data['adm_state'] = 'awaiting_broadcast'
-        context.user_data['broadcast_type'] = 'active'
-
-    elif data == "adm_bc_buyers":
-        await query.edit_message_text(
-            "💳 *ارسال به خریداران پکیج*\n\n"
-            "لطفاً متن پیام خود را ارسال کنید:",
-            reply_markup=get_admin_back_button(),
-            parse_mode="Markdown"
-        )
-        context.user_data['adm_state'] = 'awaiting_broadcast'
-        context.user_data['broadcast_type'] = 'buyers'
+        context.user_data['broadcast_type'] = bc_type
 
     # ---- هدیه ----
     elif data == "adm_gift":
@@ -619,19 +605,19 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         except:
             pass
 
-    elif data.startswith("adm_set_") or data == "adm_toggle":
-        if data == "adm_toggle":
-            try:
-                await query.edit_message_text(
-                    "🚫 *روشن/خاموش کردن ربات*\n\n"
-                    "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
-                    reply_markup=get_toggle_buttons(),
-                    parse_mode="Markdown"
-                )
-            except:
-                pass
-        else:
-            await query.answer("🚧 این بخش در حال ساخت است.", show_alert=True)
+    elif data == "adm_toggle":
+        if not is_owner(user_id):
+            await query.answer("⛔ فقط مالک.", show_alert=True)
+            return
+        try:
+            await query.edit_message_text(
+                "🚫 *روشن/خاموش کردن ربات*\n\n"
+                "لطفاً یکی از گزینه‌ها را انتخاب کنید:",
+                reply_markup=get_toggle_buttons(),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
 
     elif data == "adm_toggle_on":
         await query.answer("✅ ربات روشن است.")
@@ -646,6 +632,9 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data == "adm_toggle_off":
         await query.answer("⚠️ این قابلیت موقتاً غیرفعال است.", show_alert=True)
+
+    elif data.startswith("adm_set_"):
+        await query.answer("🚧 این بخش در حال ساخت است.", show_alert=True)
 
     else:
         await query.answer("⚠️ این دکمه فعال نیست.", show_alert=False)
@@ -879,7 +868,6 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
             return True
         days = int(text)
         uid = context.user_data.get('gift_time_user_id')
-        from database import get_shamsi_future_date
         new_expire = get_shamsi_future_date(days)
         user_data = get_user(uid)
         if user_data:
@@ -930,7 +918,6 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     # ---- پیام همگانی ----
     elif state == 'awaiting_broadcast':
-        broadcast_type = context.user_data.get('broadcast_type', 'all')
         users = get_all_users()
         success = 0
         for uid in users:

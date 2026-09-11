@@ -598,7 +598,7 @@ TEACHERS_INFO = {
                 "🔸 برگزارکننده کلاس‌های جمع‌بندی برای مدارس برتر تهران\n"
                 "🔸 برگزاری کلاس خصوصی"
             ),
-            "image": "https://i.postimg.cc/fW32F8G3/b30259b4-7f02-40cb-8388-5bdbe8dd426b-png.jpg"
+            "image": "https://i.postimg.cc/3RXhLNBv/IMG-20260911-130048.jpg"
         }
     ],
     "ریاضی": [
