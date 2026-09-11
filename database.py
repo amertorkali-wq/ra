@@ -34,6 +34,17 @@ def init_db():
     conn = get_connection()
     c = conn.cursor()
 
+    # ⚠️ Migration - اضافه کردن ستون‌های جدید به جدول‌های موجود
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_status TEXT DEFAULT 'pending'")
+        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_completed_at TEXT DEFAULT NULL")
+        c.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS package_id INTEGER DEFAULT NULL")
+        conn.commit()
+        print("✅ Migration انجام شد")
+    except Exception as e:
+        print(f"⚠️ Migration: {e}")
+        conn.rollback()
+
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id BIGINT PRIMARY KEY,
@@ -54,6 +65,8 @@ def init_db():
             has_start_package INTEGER DEFAULT 0,
             is_blocked INTEGER DEFAULT 0,
             role TEXT DEFAULT 'user',
+            referral_status TEXT DEFAULT 'pending',
+            referral_completed_at TEXT DEFAULT NULL,
             created_at TEXT
         )
     ''')
@@ -173,6 +186,7 @@ def init_db():
             amount BIGINT,
             description TEXT,
             card_id INTEGER DEFAULT NULL,
+            package_id INTEGER DEFAULT NULL,
             status TEXT DEFAULT 'pending',
             ref_id TEXT,
             card_pan TEXT,
@@ -273,6 +287,7 @@ def update_user(user_id, **kwargs):
 
 
 def reward_inviter(invited_user_id):
+    """پاداش فقط زمانی که کاربر احراز هویت کامل کنه"""
     conn = get_connection()
     c = conn.cursor()
 
@@ -304,12 +319,39 @@ def reward_inviter(invited_user_id):
         WHERE user_id = %s
     ''', (inviter[0] + INVITE_REWARD, inviter[1] + 1, inviter[2] + INVITE_REWARD_QUESTIONS, inviter_id))
 
-    c.execute("UPDATE users SET invited_by_rewarded = 1 WHERE user_id = %s", (invited_user_id,))
+    c.execute('''
+        UPDATE users 
+        SET invited_by_rewarded = 1, 
+            referral_status = 'completed', 
+            referral_completed_at = %s 
+        WHERE user_id = %s
+    ''', (get_shamsi_now(), invited_user_id))
 
     conn.commit()
     c.close()
     conn.close()
     return inviter_id
+
+
+def get_user_referral_stats(user_id):
+    """آمار زیرمجموعه‌های کاربر (کامل/ناقص)"""
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute("""
+        SELECT 
+            COUNT(*) FILTER (WHERE phone_verified = 1 AND invited_by_rewarded = 1) as complete,
+            COUNT(*) FILTER (WHERE phone_verified = 0 OR invited_by_rewarded = 0) as incomplete
+        FROM users 
+        WHERE invited_by = %s
+    """, (user_id,))
+    row = c.fetchone()
+    c.close()
+    conn.close()
+
+    if row:
+        return {'complete': row[0] or 0, 'incomplete': row[1] or 0}
+    return {'complete': 0, 'incomplete': 0}
 
 
 def get_all_users():
@@ -845,14 +887,29 @@ def add_transaction(user_id, amount, card_number, transaction_id, status, type_)
 # پرداخت زیبال
 # ============================================
 
-def create_payment_record(user_id, authority, amount, description, card_id=None):
+def create_payment_record(user_id, authority, amount, description, card_id=None, package_id=None):
+    """
+    ساخت رکورد پرداخت در دیتابیس
+
+    Args:
+        user_id: آیدی کاربر
+        authority: trackId زیبال
+        amount: مبلغ (تومان)
+        description: توضیحات
+        card_id: آیدی کارت
+        package_id: آیدی پکیج
+    """
     conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
+
     c.execute('''
-        INSERT INTO payments (user_id, authority, amount, description, card_id, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
-    ''', (user_id, authority, amount, description, card_id, now))
+        INSERT INTO payments
+        (user_id, authority, amount, description, card_id, package_id, status, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, 'pending', %s)
+        RETURNING id
+    ''', (user_id, authority, amount, description, card_id, package_id, now))
+
     payment_id = c.fetchone()[0]
     conn.commit()
     c.close()
@@ -861,30 +918,83 @@ def create_payment_record(user_id, authority, amount, description, card_id=None)
 
 
 def get_payment_by_authority(authority):
+    """گرفتن پرداخت بر اساس authority (tuple)"""
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM payments WHERE authority = %s", (authority,))
+    c.execute("SELECT * FROM payments WHERE authority = %s", (str(authority),))
     p = c.fetchone()
     c.close()
     conn.close()
     return p
 
 
+def get_payment_by_authority_full(authority):
+    """گرفتن پرداخت با تمام فیلدها (dict)"""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT id, user_id, authority, amount, description, card_id,
+               package_id, status, ref_id, card_pan, created_at, verified_at
+        FROM payments WHERE authority = %s
+    """, (str(authority),))
+    row = c.fetchone()
+    c.close()
+    conn.close()
+
+    if not row:
+        return None
+
+    return {
+        'id': row[0],
+        'user_id': row[1],
+        'authority': row[2],
+        'amount': row[3],
+        'description': row[4],
+        'card_id': row[5],
+        'package_id': row[6],
+        'status': row[7],
+        'ref_id': row[8],
+        'card_pan': row[9],
+        'created_at': row[10],
+        'verified_at': row[11],
+    }
+
+
 def update_payment_status(authority, status, ref_id=None, card_pan=None):
+    """به‌روزرسانی وضعیت پرداخت"""
     conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
+
     if status == 'verified':
         c.execute('''
             UPDATE payments
             SET status = %s, ref_id = %s, card_pan = %s, verified_at = %s
             WHERE authority = %s
-        ''', (status, ref_id, card_pan, now, authority))
+        ''', (status, ref_id, card_pan, now, str(authority)))
     else:
-        c.execute("UPDATE payments SET status = %s WHERE authority = %s", (status, authority))
+        c.execute(
+            "UPDATE payments SET status = %s WHERE authority = %s",
+            (status, str(authority))
+        )
+
     conn.commit()
     c.close()
     conn.close()
+
+
+def is_payment_verified(authority):
+    """آیا این پرداخت قبلاً verify شده؟ (جلوگیری از double-spend)"""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        "SELECT status FROM payments WHERE authority = %s",
+        (str(authority),)
+    )
+    row = c.fetchone()
+    c.close()
+    conn.close()
+    return row and row[0] == 'verified'
 
 
 # ============================================

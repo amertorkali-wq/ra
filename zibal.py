@@ -1,16 +1,13 @@
 import os
-import requests
 import time
-from config import ZIBAL_SANDBOX, ZIBAL_MERCHANT as CONFIG_MERCHANT, ZIBAL_CALLBACK_URL
-
-ZIBAL_MERCHANT = os.environ.get("ZIBAL_MERCHANT", CONFIG_MERCHANT)
+import requests
+from config import ZIBAL_SANDBOX, ZIBAL_MERCHANT, ZIBAL_CALLBACK_URL
 
 ZIBAL_BASE_URL = "https://gateway.zibal.ir"
 ZIBAL_REQUEST_URL = f"{ZIBAL_BASE_URL}/v1/request"
 ZIBAL_VERIFY_URL = f"{ZIBAL_BASE_URL}/v1/verify"
 ZIBAL_INQUIRY_URL = f"{ZIBAL_BASE_URL}/v1/inquiry"
 ZIBAL_STARTPAY = f"{ZIBAL_BASE_URL}/start/"
-
 
 ZIBAL_RESULT_CODES = {
     100: "موفق",
@@ -28,23 +25,34 @@ ZIBAL_RESULT_CODES = {
 }
 
 
-def get_merchant():
+def get_merchant() -> str:
+    """در حالت sandbox از zibal استفاده می‌کند"""
     if ZIBAL_SANDBOX:
         return "zibal"
     return ZIBAL_MERCHANT
 
 
-def generate_order_id(user_id):
-    return f"VIOLEX-{user_id}-{int(time.time())}"
+def create_payment(amount_toman: int, description: str,
+                   callback_url: str = None, mobile: str = None,
+                   order_id: str = None) -> dict:
+    """
+    درخواست پرداخت از زیبال
 
+    Args:
+        amount_toman: مبلغ به تومان
+        description: توضیحات
+        callback_url: آدرس بازگشت (پیش‌فرض از config)
+        mobile: شماره موبایل
+        order_id: شناسه سفارش
 
-def create_payment(amount, description, callback_url=None, mobile=None, order_id=None):
+    Returns:
+        dict: {'success': bool, 'authority': str, 'track_id': int, 'payment_url': str, ...}
+    """
     merchant = get_merchant()
-
     if not merchant:
         return {"success": False, "error": "مرچنت تنظیم نشده", "code": -1}
 
-    amount_rial = amount * 10
+    amount_rial = amount_toman * 10
 
     if not callback_url:
         callback_url = ZIBAL_CALLBACK_URL
@@ -91,19 +99,28 @@ def create_payment(amount, description, callback_url=None, mobile=None, order_id
         return {"success": False, "error": str(e)}
 
 
-def verify_payment(track_id, amount):
-    merchant = get_merchant()
+def verify_payment(track_id: int, amount_toman: int = None) -> dict:
+    """
+    تأیید پرداخت زیبال
 
+    Args:
+        track_id: شناسه تراکنش زیبال
+        amount_toman: مبلغ مورد انتظار (به تومان) برای بررسی
+
+    Returns:
+        dict: {'success': bool, 'ref_id': str, 'card_pan': str, 'amount': int, ...}
+    """
+    merchant = get_merchant()
     if not merchant:
         return {"success": False, "error": "مرچنت تنظیم نشده"}
 
-    amount_rial = amount * 10
-
     payload = {
         "merchant": merchant,
-        "amount": amount_rial,
         "trackId": int(track_id),
     }
+
+    if amount_toman is not None:
+        payload["amount"] = amount_toman * 10  # بررسی مبلغ
 
     headers = {
         "Content-Type": "application/json",
@@ -120,7 +137,8 @@ def verify_payment(track_id, amount):
                 "success": True,
                 "ref_id": result.get("refNumber", "-"),
                 "card_pan": result.get("cardNumber", "-"),
-                "amount": result.get("amount", amount_rial),
+                "amount_rial": result.get("amount", 0),
+                "amount_toman": result.get("amount", 0) // 10,
             }
         elif result.get("result") == 201:
             return {
@@ -128,17 +146,21 @@ def verify_payment(track_id, amount):
                 "already_verified": True,
                 "ref_id": result.get("refNumber", "-"),
                 "card_pan": result.get("cardNumber", "-"),
+                "amount_rial": result.get("amount", 0),
+                "amount_toman": result.get("amount", 0) // 10,
             }
         else:
             code = result.get("result")
             error_msg = result.get("message", ZIBAL_RESULT_CODES.get(code, "خطای تأیید"))
+            print(f"🔴 Zibal Verify Error: {code} - {error_msg}")
             return {"success": False, "error": error_msg, "code": code}
     except Exception as e:
         print(f"🔴 Zibal Verify Error: {e}")
         return {"success": False, "error": str(e)}
 
 
-def inquiry_payment(track_id):
+def inquiry_payment(track_id: int) -> dict:
+    """استعلام تراکنش از زیبال"""
     merchant = get_merchant()
     if not merchant:
         return {"success": False, "error": "مرچنت تنظیم نشده"}

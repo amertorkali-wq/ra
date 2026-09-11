@@ -1,5 +1,6 @@
 import random
 import requests
+import time
 from datetime import datetime
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
@@ -19,6 +20,7 @@ from database import (
     reward_inviter, get_shamsi_now, get_shamsi_future_date,
     set_verification_code, get_verification_code,
     create_payment_record, update_payment_status,
+    get_payment_by_authority_full,
     get_user_open_ticket, get_card,
     get_discount_code, use_discount_code,
     get_user_referral_stats,
@@ -125,7 +127,7 @@ def clear_user_states(context):
         'question_text', 'question_file', 'selected_package',
         'selected_card_id', 'payment_authority', 'payment_amount',
         'remaining_amount', 'question_purchase', 'question_purchase_amount',
-        'invoice_id', 'card_number_temp',
+        'invoice_id', 'card_number_temp', 'payment_url',
     ]
     for state in states:
         context.user_data.pop(state, None)
@@ -221,20 +223,17 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
 
         if not cards:
             pending_cards = [c for c in all_cards if not c[5]]
-
             if pending_cards:
                 text = (
                     "⏳ *شما کارت در انتظار تأیید دارید.*\n\n"
                     "کارت شما هنوز توسط حسابدار تأیید نشده است.\n"
-                    "لطفاً تا تأیید کارت صبر کنید.\n\n"
-                    "💡 پس از تأیید، به شما اطلاع داده می‌شود."
+                    "لطفاً تا تأیید کارت صبر کنید."
                 )
             else:
                 text = (
                     "❗ *شما هنوز کارت بانکی تأیید شده‌ای ندارید.*\n\n"
                     "لطفاً از بخش «احراز هویت» اقدام کنید."
                 )
-
             try:
                 await query.edit_message_text(
                     text,
@@ -314,7 +313,7 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
         if not pkg:
             return
 
-        # پکیج استارت
+        # پکیج استارت (رایگان)
         if pkg['is_start']:
             if user_info['has_start_package']:
                 try:
@@ -350,7 +349,7 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
                 pass
             return
 
-        # پکیج عادی
+        # پکیج عادی - نیاز به کارت تأیید شده
         cards = get_verified_cards(user_id)
         if not cards:
             try:
@@ -368,8 +367,8 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
 
         try:
             await query.edit_message_text(
-                f"💳 *لطفاً کارت بانکی که قصد پرداخت با آن را دارید انتخاب کنید.*\n\n"
-                f"📦 پکیج انتخابی: {pkg['name']}\n"
+                f"💳 *لطفاً کارت بانکی مورد نظر را انتخاب کنید.*\n\n"
+                f"📦 پکیج: {pkg['name']}\n"
                 f"💰 مبلغ: {pkg['price']:,} تومان\n"
                 f"❓ تعداد سوال: {pkg['questions']}",
                 reply_markup=get_cards_for_payment(cards),
@@ -378,199 +377,248 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
         except:
             pass
 
-    # ---- انتخاب کارت برای پرداخت ----
+    # ---- انتخاب کارت → ساخت تراکنش واقعی زیبال ----
     elif data.startswith("pay_card_"):
         card_id = int(data.split("_")[2])
         pkg = context.user_data.get('selected_package')
         if not pkg:
-            return
-
-        wallet = user_info['wallet']
-        total_price = pkg['price']
-        context.user_data['selected_card_id'] = card_id
-
-        import time
-        invoice_id = int(time.time())
-        context.user_data['invoice_id'] = invoice_id
-
-        wallet_deduction = min(wallet, total_price)
-        remaining = total_price - wallet_deduction
-
-        invoice_text = (
-            f"*📜 پیش فاکتور شماره:* `{invoice_id}`\n"
-            f"*📦 خدمات:* خرید پکیج\n"
-            f"*🖌️ نام پکیج:* {pkg['name']}\n"
-            f"*💰 قیمت:* {total_price * 10:,}ریال\n"
-            f"*💰 کسر از کیف پول:* {wallet_deduction * 10:,}ریال\n"
-            f"*💰 قابل پرداخت:* {remaining * 10:,}ریال\n"
-            f"*⏰ اعتبار زمانی:* {pkg['days']}روز\n"
-            f"*❓ تعداد سوال:* {pkg['questions']}عدد\n"
-        )
-
-        if remaining > 0:
-            description = f"خرید {pkg['name']} - ویولکس"
-            result = create_payment(
-                amount=remaining,
-                description=description,
-                mobile=user_info.get('phone'),
-            )
-
-            if result.get('success'):
-                authority = result['authority']
-                payment_url = result['payment_url']
-                create_payment_record(user_id, authority, remaining, description, card_id)
-
-                context.user_data['payment_authority'] = authority
-                context.user_data['payment_amount'] = remaining
-
-                invoice_text += (
-                    f"*🔗 در لینک زیر پرداخت خود را انجام دهید*\n"
-                    f"{payment_url}"
-                )
-
-                try:
-                    await query.edit_message_text(
-                        invoice_text,
-                        reply_markup=get_invoice_buttons(invoice_id),
-                        parse_mode="Markdown",
-                        disable_web_page_preview=True
-                    )
-                except:
-                    pass
-            else:
-                try:
-                    await query.edit_message_text(
-                        f"❌ خطا در ایجاد تراکنش.\n\n"
-                        f"خطا: {result.get('error', 'نامشخص')}",
-                    )
-                except:
-                    pass
-        else:
-            invoice_text += f"*✅ مبلغ قابل پرداخت: 0ریال (کیف پول کافی است)*"
-            context.user_data['payment_amount'] = 0
-            context.user_data['payment_authority'] = "wallet"
-
-            try:
-                await query.edit_message_text(
-                    invoice_text,
-                    reply_markup=get_invoice_buttons(invoice_id),
-                    parse_mode="Markdown",
-                    disable_web_page_preview=True
-                )
-            except:
-                pass
-
-    # ---- پرداخت کردم ----
-    elif data.startswith("paid_check_"):
-        authority = context.user_data.get('payment_authority')
-        amount = context.user_data.get('payment_amount')
-        pkg = context.user_data.get('selected_package')
-
-        if not pkg:
             await query.answer("⚠️ اطلاعات پکیج یافت نشد.", show_alert=True)
             return
 
-        # پرداخت با کیف پول
-        if authority == "wallet" or amount == 0:
-            new_wallet = user_info['wallet'] - pkg['price']
-            new_questions = user_info['questions_remaining'] + pkg['questions']
-            expire_date = get_shamsi_future_date(pkg['days'])
+        context.user_data['selected_card_id'] = card_id
 
-            update_user(
-                user_id,
-                wallet=max(0, new_wallet),
-                questions_remaining=new_questions,
-                active_package=pkg['name'],
-                package_expire_date=expire_date
-            )
-            add_transaction(user_id, pkg['price'], "wallet", "-", "success", "package")
+        # توضیحات
+        description = f"خرید {pkg['name']} - ویولکس"
 
+        # درخواست پرداخت از زیبال
+        result = create_payment(
+            amount_toman=pkg['price'],
+            description=description,
+            mobile=user_info.get('phone'),
+        )
+
+        if not result.get('success'):
+            error_msg = result.get('error', 'خطای نامشخص')
             try:
                 await query.edit_message_text(
-                    f"✅ پرداخت با کیف پول انجام شد.\n\n"
-                    f"📦 پکیج: {pkg['name']}\n"
-                    f"❓ تعداد سوال: {pkg['questions']}\n"
-                    f"⏳ اعتبار تا: {expire_date}"
+                    f"❌ *خطا در ایجاد تراکنش*\n\n"
+                    f"دلیل: {error_msg}\n\n"
+                    f"لطفاً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_balance", style="danger")]
+                    ]),
+                    parse_mode="Markdown"
                 )
             except:
                 pass
-
-            clear_user_states(context)
             return
 
-        if not authority or amount is None:
-            await query.answer("⚠️ اطلاعات پرداخت یافت نشد.", show_alert=True)
-            return
+        authority = result['authority']
+        payment_url = result['payment_url']
+
+        # ثبت در دیتابیس
+        create_payment_record(
+            user_id=user_id,
+            authority=authority,
+            amount=pkg['price'],
+            description=description,
+            card_id=card_id,
+            package_id=pkg['id'],
+        )
+
+        # ذخیره در context
+        context.user_data['payment_authority'] = authority
+        context.user_data['payment_amount'] = pkg['price']
+        context.user_data['payment_url'] = payment_url
+
+        # پیام به کاربر با دکمه پرداخت
+        text = (
+            f"🧾 *پیش‌فاکتور پرداخت*\n\n"
+            f"📦 پکیج: {pkg['name']}\n"
+            f"❓ تعداد سوال: {pkg['questions']}\n"
+            f"⏳ مدت اعتبار: {pkg['days']} روز\n\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"💰 مبلغ قابل پرداخت: *{pkg['price']:,} تومان*\n"
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"💳 برای پرداخت، روی دکمه زیر بزنید و اطلاعات کارت خود را در *درگاه امن زیبال* وارد کنید.\n\n"
+            f"⚠️ پس از پرداخت، روی دکمه «✅ پرداخت کردم» بزنید."
+        )
+
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("💳 پرداخت آنلاین", url=payment_url, style="success")],
+            [InlineKeyboardButton("✅ پرداخت کردم", callback_data=f"verify_pay_{authority}", style="primary")],
+            [InlineKeyboardButton("❌ لغو", callback_data="back_to_balance", style="danger")],
+        ])
 
         try:
-            await query.edit_message_text("⏳ در حال بررسی پرداخت...")
+            await query.edit_message_text(
+                text,
+                reply_markup=keyboard,
+                parse_mode="Markdown",
+                disable_web_page_preview=True
+            )
         except:
             pass
 
-        result = verify_payment(authority, amount)
+    # ---- کاربر می‌گه پرداخت کردم → verify ----
+    elif data.startswith("verify_pay_"):
+        authority = data.split("_", 2)[2]
 
-        if result.get('success'):
-            ref_id = result.get('ref_id', '-')
-            card_pan = result.get('card_pan', '-')
-            update_payment_status(authority, 'verified', ref_id, card_pan)
+        # بررسی وجود پرداخت
+        payment = get_payment_by_authority_full(authority)
+        if not payment:
+            await query.answer("⚠️ تراکنش یافت نشد.", show_alert=True)
+            return
 
-            new_wallet = user_info['wallet'] - min(user_info['wallet'], pkg['price'])
-            new_questions = user_info['questions_remaining'] + pkg['questions']
+        if payment['user_id'] != user_id:
+            await query.answer("⛔ این تراکنش مال شما نیست.", show_alert=True)
+            return
+
+        # اگه قبلاً verified شده
+        if payment['status'] == 'verified':
+            await query.answer("✅ این پرداخت قبلاً تأیید شده است.", show_alert=True)
+            try:
+                await query.edit_message_text(
+                    "✅ *پرداخت شما قبلاً تأیید شده است.*\n\n"
+                    "پکیج شما فعال است. از منوی اصلی می‌توانید سوال بپرسید.",
+                    reply_markup=get_main_menu_keyboard(),
+                    parse_mode="Markdown"
+                )
+            except:
+                pass
+            return
+
+        # اگه failed شده
+        if payment['status'] == 'failed':
+            await query.answer("❌ این تراکنش ناموفق بوده.", show_alert=True)
+            try:
+                await query.edit_message_text(
+                    "❌ *این تراکنش ناموفق بوده است.*\n\n"
+                    "لطفاً دوباره از منوی «افزایش موجودی» اقدام کنید.",
+                    reply_markup=get_main_menu_keyboard(),
+                    parse_mode="Markdown"
+                )
+            except:
+                pass
+            return
+
+        # نمایش پیام انتظار
+        await query.answer("⏳ در حال بررسی پرداخت...", show_alert=False)
+
+        # Verify با API زیبال
+        verify_result = verify_payment(int(authority), amount_toman=payment['amount'])
+
+        if not verify_result.get('success'):
+            error = verify_result.get('error', 'خطای نامشخص')
+            code = verify_result.get('code')
+
+            # اگه پرداخت انجام نشده
+            if code == 202:
+                try:
+                    await query.edit_message_text(
+                        "❌ *پرداخت شما انجام نشده است.*\n\n"
+                        "لطفاً از طریق درگاه زیبال پرداخت کنید و سپس روی «پرداخت کردم» بزنید.",
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_balance", style="danger")]
+                        ]),
+                        parse_mode="Markdown"
+                    )
+                except:
+                    pass
+                return
+
+            update_payment_status(authority, 'failed')
+            try:
+                await query.edit_message_text(
+                    f"⚠️ *تأیید پرداخت ناموفق بود.*\n\n"
+                    f"دلیل: {error}\n\n"
+                    f"🆔 کد پیگیری: `{authority}`\n\n"
+                    f"اگر مبلغی از حساب شما کسر شده، لطفاً با پشتیبانی تماس بگیرید.",
+                    reply_markup=get_main_menu_keyboard(),
+                    parse_mode="Markdown"
+                )
+            except:
+                pass
+            return
+
+        # بررسی مبلغ
+        paid_amount_rial = verify_result.get('amount_rial', 0)
+        expected_amount_rial = payment['amount'] * 10
+
+        if paid_amount_rial != expected_amount_rial:
+            update_payment_status(authority, 'failed')
+            try:
+                await query.edit_message_text(
+                    f"⚠️ *مبلغ پرداخت‌شده با مبلغ ثبت‌شده مطابقت ندارد.*\n\n"
+                    f"لطفاً با پشتیبانی تماس بگیرید.",
+                    reply_markup=get_main_menu_keyboard(),
+                    parse_mode="Markdown"
+                )
+            except:
+                pass
+            return
+
+        # ✅ موفق! فعال‌سازی
+        ref_id = verify_result.get('ref_id', '-')
+        card_pan = verify_result.get('card_pan', '-')
+
+        update_payment_status(authority, 'verified', ref_id, card_pan)
+        add_transaction(user_id, payment['amount'], card_pan, ref_id, "success", "package")
+
+        # فعال‌سازی پکیج
+        pkg = None
+        if payment['package_id'] is not None:
+            pkg = next((p for p in DEFAULT_PACKAGES if p['id'] == payment['package_id']), None)
+
+        if pkg:
+            # بازخوانی اطلاعات کاربر از دیتابیس
+            fresh_user = get_user_info(user_id)
+            current_questions = fresh_user['questions_remaining'] if fresh_user else 0
+            new_questions = current_questions + pkg['questions']
             expire_date = get_shamsi_future_date(pkg['days'])
+
             update_user(
                 user_id,
-                wallet=new_wallet,
                 questions_remaining=new_questions,
                 active_package=pkg['name'],
-                package_expire_date=expire_date
+                package_expire_date=expire_date,
             )
-            add_transaction(user_id, amount, card_pan, ref_id, "success", "package")
 
             try:
                 await query.edit_message_text(
-                    f"✅ پرداخت شما با موفقیت انجام شد!\n\n"
+                    f"✅ *پرداخت شما با موفقیت انجام شد!*\n\n"
                     f"📦 پکیج: {pkg['name']}\n"
-                    f"🆔 کد پیگیری: {ref_id}\n"
-                    f"💳 کارت: {card_pan}\n\n"
-                    f"از اینکه ویولکس را انتخاب کردید سپاسگزاریم 🌟"
+                    f"❓ تعداد سوال: {pkg['questions']}\n"
+                    f"⏳ اعتبار تا: {expire_date}\n"
+                    f"📚 مجموع سوالات باقی‌مانده: {new_questions}\n\n"
+                    f"🆔 کد پیگیری: `{ref_id}`\n"
+                    f"💳 کارت: `{card_pan}`\n\n"
+                    f"🌟 از اینکه ویولکس را انتخاب کردید سپاسگزاریم.",
+                    reply_markup=get_main_menu_keyboard(),
+                    parse_mode="Markdown"
                 )
             except:
                 pass
 
+            # گزارش به کانال
             try:
                 await context.bot.send_message(
                     chat_id=TRANSACTION_CHANNEL,
                     text=(
-                        f"📢 گزارش تراکنش\n\n"
-                        f"👤 کاربر: @{query.from_user.username or 'ندارد'}\n"
-                        f"🆔 ID: {user_id}\n"
-                        f"💰 مبلغ: {amount:,} تومان\n"
+                        f"📢 *گزارش تراکنش*\n\n"
+                        f"👤 کاربر: `{user_id}`\n"
+                        f"💰 مبلغ: {payment['amount']:,} تومان\n"
                         f"🎁 پکیج: {pkg['name']}\n"
-                        f"🆔 کد پیگیری: {ref_id}\n"
-                        f"💳 کارت: {card_pan}\n"
+                        f"🆔 کد پیگیری: `{ref_id}`\n"
+                        f"💳 کارت: `{card_pan}`\n"
                         f"🕐 زمان: {get_shamsi_now()}"
-                    )
+                    ),
+                    parse_mode="Markdown"
                 )
             except:
                 pass
 
-            clear_user_states(context)
-        else:
-            error_code = result.get('code')
-            if error_code == 101:
-                try:
-                    await query.edit_message_text("✅ پرداخت شما قبلاً تأیید شده است.")
-                except:
-                    pass
-            else:
-                try:
-                    await query.edit_message_text(
-                        f"⚠️ تأیید پرداخت ناموفق بود.\n\n"
-                        f"اگر مبلغی از حساب شما کسر شده، لطفاً با پشتیبانی تماس بگیرید.\n\n"
-                        f"🆔 کد پیگیری: {authority}"
-                    )
-                except:
-                    pass
+        clear_user_states(context)
 
     # ---- کد تخفیف ----
     elif data.startswith("discount_"):
@@ -967,7 +1015,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except:
                     pass
 
-            # ⚠️ فقط درخواست عکس کارت - بدون متن طولانی
+            # ⚠️ فقط درخواست عکس کارت
             await update.message.reply_text(
                 "✅ شماره شما با موفقیت تأیید شد!\n\n"
                 "📷 حالا لطفاً *عکس کارت بانکی* خود را ارسال کنید.\n"
@@ -1089,9 +1137,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"💰 قیمت هر سوال: {price_per:,} تومان\n"
                 f"━━━━━━━━━━━━━━━━━━\n"
                 f"💰 مبلغ کل: {total:,} تومان\n"
-                f"💳 موجودی کیف پول: {wallet:,} تومان\n"
-                f"➖ کسر از کیف پول: {min(wallet, total):,} تومان\n"
-                f"✅ مبلغ قابل پرداخت: {remaining:,} تومان\n"
                 f"━━━━━━━━━━━━━━━━━━\n\n"
                 f"💳 لطفاً کارت پرداخت را انتخاب کنید:"
             )

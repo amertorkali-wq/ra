@@ -5,7 +5,7 @@ import os
 # ============================================
 
 # ---------- توکن ربات ----------
-TOKEN = "8762301184:AAGbn9CZirNf7Yc9nRdnBpQMfFGEnu8r9wA"
+TOKEN = os.environ.get("BOT_TOKEN", "8762301184:AAGbn9CZirNf7Yc9nRdnBpQMfFGEnu8r9wA")
 
 # ---------- کانال جوین اجباری ----------
 CHANNEL_ID = -1003858232624
@@ -45,23 +45,77 @@ SMSIR_TEMPLATE_ID = 851804
 SMSIR_LINE_NUMBER = "30004505000017"
 
 # ---------- زیبال (واقعی) ----------
-ZIBAL_MERCHANT = "69e3945ee6d570ad00fd0dad"
+ZIBAL_MERCHANT = os.environ.get("ZIBAL_MERCHANT", "69e3945ee6d570ad00fd0dad")
 ZIBAL_SANDBOX = False
-ZIBAL_CALLBACK_URL = "https://your-site.com/payment/callback"  # ⚠️ این رو تغییر بده
+# ⚠️ این آدرس باید دامنه واقعی Railway باشه (بدون / در انتها)
+RAILWAY_PUBLIC_DOMAIN = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "your-app.up.railway.app")
+ZIBAL_CALLBACK_URL = f"https://{RAILWAY_PUBLIC_DOMAIN}/zibal/callback"
+
+# ---------- پورت وب‌سرور ----------
+WEB_PORT = int(os.environ.get("PORT", 8080))
 
 # ---------- تایم لیمیت‌ها ----------
 TEACHER_TIMEOUT_MINUTES = 180
 SUPPORT_TIMEOUT_HOURS = 24
 
-# ---------- پکیج‌ها ----------
+# ---------- پکیج‌ها (مبلغ‌های درست - تومان) ----------
 DEFAULT_PACKAGES = [
-    {"id": 0, "name": "پکیج استارت", "price": 0, "days": 3, "questions": 4, "is_start": True},
-    {"id": 1, "name": "پکیج 1 ماهه", "price": 250000, "days": 30, "questions": 10, "is_start": False},
-    {"id": 2, "name": "پکیج 2 ماهه + 1 سوال هدیه", "price": 500000, "days": 60, "questions": 21, "is_start": False},
-    {"id": 3, "name": "پکیج 3 ماهه + 3 سوال هدیه", "price": 750000, "days": 90, "questions": 33, "is_start": False},
-    {"id": 4, "name": "پکیج 4 ماهه + 5 سوال هدیه", "price": 1000000, "days": 120, "questions": 45, "is_start": False},
-    {"id": 5, "name": "پکیج 5 ماهه + 6 سوال هدیه", "price": 1250000, "days": 150, "questions": 56, "is_start": False},
-    {"id": 6, "name": "پکیج 6 ماهه + 7 سوال هدیه", "price": 1500000, "days": 180, "questions": 67, "is_start": False},
+    {
+        "id": 0,
+        "name": "پکیج استارت",
+        "price": 0,
+        "days": 3,
+        "questions": 4,
+        "is_start": True,
+    },
+    {
+        "id": 1,
+        "name": "پکیج ۱ ماهه",
+        "price": 250_000,
+        "days": 30,
+        "questions": 10,
+        "is_start": False,
+    },
+    {
+        "id": 2,
+        "name": "پکیج ۲ ماهه + ۱ سوال هدیه",
+        "price": 500_000,
+        "days": 60,
+        "questions": 21,
+        "is_start": False,
+    },
+    {
+        "id": 3,
+        "name": "پکیج ۳ ماهه + ۳ سوال هدیه",
+        "price": 750_000,
+        "days": 90,
+        "questions": 33,
+        "is_start": False,
+    },
+    {
+        "id": 4,
+        "name": "پکیج ۴ ماهه + ۵ سوال هدیه",
+        "price": 1_000_000,
+        "days": 120,
+        "questions": 45,
+        "is_start": False,
+    },
+    {
+        "id": 5,
+        "name": "پکیج ۵ ماهه + ۶ سوال هدیه",
+        "price": 1_250_000,
+        "days": 150,
+        "questions": 56,
+        "is_start": False,
+    },
+    {
+        "id": 6,
+        "name": "پکیج ۶ ماهه + ۷ سوال هدیه",
+        "price": 1_500_000,
+        "days": 180,
+        "questions": 67,
+        "is_start": False,
+    },
 ]
 
 # ---------- نقش‌ها ----------
