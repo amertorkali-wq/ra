@@ -1,118 +1,80 @@
 import os
-import requests
-import time
 
+# ============================================
+# تنظیمات ربات VIOLEX
+# ============================================
+
+# ---------- توکن ربات ----------
+TOKEN = "8762301184:AAGbn9CZirNf7Yc9nRdnBpQMfFGEnu8r9wA"
+
+# ---------- کانال جوین اجباری ----------
+CHANNEL_ID = -1003858232624
+CHANNEL_LINK = "https://t.me/violex_official"
+
+# ---------- لینک ربات ----------
+BOT_LINK = "https://t.me/VIOLEXQ_bot?start="
+
+# ---------- عکس درباره ما ----------
+ABOUT_IMAGE_URL = "https://i.postimg.cc/Njj6HM7V/IMG-20260505-233450.jpg"
+
+# ---------- مالک اصلی ----------
+OWNER_ID = 7803165903
+
+# ---------- گروه دبیران ----------
+TEACHERS_GROUP_BIO = -1004360248131
+TEACHERS_GROUP_CHEM = -1003961456151
+TEACHERS_GROUP_PHYS = -1003554950675
+TEACHERS_GROUP_MATH = -1004117472263
+
+# ---------- گروه پشتیبانی ----------
+SUPPORT_GROUP = -1003780590510
+
+# ---------- گروه حسابداری ----------
+ACCOUNTING_GROUP = -1003609493315
+
+# ---------- کانال گزارش تراکنش ----------
+TRANSACTION_CHANNEL = -1004348903892
+
+# ---------- هدیه دعوت ----------
+INVITE_REWARD = 4000
+INVITE_REWARD_QUESTIONS = 3
+
+# ---------- SMS.ir ----------
+SMSIR_API_KEY = "B33h8avj7PGBquAGfOXPLOw7LKYnmJNBXIN9XuxJLrfK0ojd"
+SMSIR_TEMPLATE_ID = 851804
+SMSIR_LINE_NUMBER = "30004505000017"
+
+# ---------- زیبال ----------
 ZIBAL_MERCHANT = os.environ.get("ZIBAL_MERCHANT", "zibal")
+ZIBAL_SANDBOX = True
 
-ZIBAL_BASE_URL = "https://gateway.zibal.ir"
-ZIBAL_REQUEST_URL = f"{ZIBAL_BASE_URL}/v1/request"
-ZIBAL_VERIFY_URL = f"{ZIBAL_BASE_URL}/v1/verify"
-ZIBAL_STARTPAY = f"{ZIBAL_BASE_URL}/start/"
+# ---------- تایم لیمیت‌ها ----------
+TEACHER_TIMEOUT_MINUTES = 180
+SUPPORT_TIMEOUT_HOURS = 24
 
+# ---------- پکیج‌ها ----------
+DEFAULT_PACKAGES = [
+    {"id": 0, "name": "پکیج استارت", "price": 0, "days": 3, "questions": 4, "is_start": True},
+    {"id": 1, "name": "پکیج 1 ماهه", "price": 250000, "days": 30, "questions": 10, "is_start": False},
+    {"id": 2, "name": "پکیج 2 ماهه + 1 سوال هدیه", "price": 500000, "days": 60, "questions": 21, "is_start": False},
+    {"id": 3, "name": "پکیج 3 ماهه + 3 سوال هدیه", "price": 750000, "days": 90, "questions": 33, "is_start": False},
+    {"id": 4, "name": "پکیج 4 ماهه + 5 سوال هدیه", "price": 1000000, "days": 120, "questions": 45, "is_start": False},
+    {"id": 5, "name": "پکیج 5 ماهه + 6 سوال هدیه", "price": 1250000, "days": 150, "questions": 56, "is_start": False},
+    {"id": 6, "name": "پکیج 6 ماهه + 7 سوال هدیه", "price": 1500000, "days": 180, "questions": 67, "is_start": False},
+]
 
-ZIBAL_RESULT_CODES = {
-    100: "موفق",
-    102: "merchant پیدا نشد",
-    103: "merchant غیرفعال",
-    104: "merchant نامعتبر",
-    105: "amount نامعتبر",
-    106: "callbackUrl نامعتبر",
-    113: "amount نامعتبر",
-    114: "mobile نامعتبر",
-    115: "IP ثبت نشده",
-    201: "قبلاً تأیید شده",
-    202: "سفارش پرداخت نشده",
-    203: "trackId نامعتبر",
+# ---------- نقش‌ها ----------
+ROLE_OWNER = "owner"
+ROLE_ADMIN = "admin"
+ROLE_TEACHER = "teacher"
+ROLE_ACCOUNTANT = "accountant"
+ROLE_SUPPORT = "support"
+ROLE_USER = "user"
+
+# ---------- دروس ----------
+SUBJECTS = {
+    "زیست": {"emoji": "🧬", "prefix": "BIO", "group": TEACHERS_GROUP_BIO},
+    "شیمی": {"emoji": "🧪", "prefix": "CHE", "group": TEACHERS_GROUP_CHEM},
+    "فیزیک": {"emoji": "⚡️", "prefix": "PHY", "group": TEACHERS_GROUP_PHYS},
+    "ریاضی": {"emoji": "📐", "prefix": "MATH", "group": TEACHERS_GROUP_MATH},
 }
-
-
-def create_payment(amount, description, callback_url=None, mobile=None, order_id=None):
-    if not ZIBAL_MERCHANT:
-        return {"success": False, "error": "مرچنت تنظیم نشده", "code": -1}
-
-    amount_rial = amount * 10
-
-    if not callback_url:
-        callback_url = "https://violexq.ir/payment/callback"
-
-    payload = {
-        "merchant": ZIBAL_MERCHANT,
-        "amount": amount_rial,
-        "description": description,
-        "callbackUrl": callback_url,
-    }
-
-    if mobile:
-        payload["mobile"] = mobile
-    if order_id:
-        payload["orderId"] = order_id
-
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-
-    try:
-        response = requests.post(ZIBAL_REQUEST_URL, json=payload, headers=headers, timeout=15)
-        result = response.json()
-        print(f"🟢 Zibal Request: {result}")
-
-        if result.get("result") == 100:
-            track_id = result.get("trackId")
-            payment_url = f"{ZIBAL_STARTPAY}{track_id}"
-            return {
-                "success": True,
-                "authority": str(track_id),
-                "track_id": track_id,
-                "payment_url": payment_url,
-                "order_id": order_id,
-            }
-        else:
-            code = result.get("result")
-            error_msg = result.get("message", ZIBAL_RESULT_CODES.get(code, "خطای نامشخص"))
-            return {"success": False, "error": error_msg, "code": code}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-def verify_payment(track_id, amount):
-    if not ZIBAL_MERCHANT:
-        return {"success": False, "error": "مرچنت تنظیم نشده"}
-
-    amount_rial = amount * 10
-
-    payload = {
-        "merchant": ZIBAL_MERCHANT,
-        "amount": amount_rial,
-        "trackId": int(track_id),
-    }
-
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-
-    try:
-        response = requests.post(ZIBAL_VERIFY_URL, json=payload, headers=headers, timeout=15)
-        result = response.json()
-        print(f"🟢 Zibal Verify: {result}")
-
-        if result.get("result") == 100:
-            return {
-                "success": True,
-                "ref_id": result.get("refNumber", "-"),
-                "card_pan": result.get("cardNumber", "-"),
-            }
-        elif result.get("result") == 201:
-            return {
-                "success": True,
-                "already_verified": True,
-                "ref_id": result.get("refNumber", "-"),
-                "card_pan": result.get("cardNumber", "-"),
-            }
-        else:
-            code = result.get("result")
-            error_msg = result.get("message", ZIBAL_RESULT_CODES.get(code, "خطای تأیید"))
-            return {"success": False, "error": error_msg, "code": code}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
