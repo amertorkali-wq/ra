@@ -77,13 +77,48 @@ def get_balance_buttons():
 
 def get_auth_buttons():
     keyboard = [
-        [InlineKeyboardButton("🧾 لیست کارت‌ها", callback_data="card_list", style="primary")],
-        [InlineKeyboardButton("➕ افزودن کارت", callback_data="add_card", style="success")],
-        [InlineKeyboardButton("➖ حذف کارت", callback_data="remove_card", style="danger")],
-        [InlineKeyboardButton("🔙 منوی اصلی", callback_data="back_to_main", style="danger")],
+        [
+            InlineKeyboardButton("🧾 لیست کارت‌ها", callback_data="card_list", style="primary"),
+            InlineKeyboardButton("➕ افزودن کارت", callback_data="add_card", style="success"),
+        ],
+        [
+            InlineKeyboardButton("➖ حذف کارت", callback_data="remove_card", style="danger"),
+            InlineKeyboardButton("🔙 منوی اصلی", callback_data="back_to_main", style="danger"),
+        ],
     ]
     return InlineKeyboardMarkup(keyboard)
 
+
+def get_cards_delete_buttons(cards):
+    """دکمه‌های حذف کارت"""
+    keyboard = []
+    for card in cards:
+        masked = f"{card[2][:4]} **** **** {card[2][-4:]}"
+        keyboard.append([
+            InlineKeyboardButton(
+                f"🗑 حذف {masked}",
+                callback_data=f"del_card_{card[0]}",
+                style="danger"
+            )
+        ])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="auth", style="danger")])
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_delete_confirm_buttons(card_id):
+    """دکمه تایید حذف کارت"""
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ بله، حذف شود", callback_data=f"confirm_del_card_{card_id}", style="danger"),
+            InlineKeyboardButton("❌ انصراف", callback_data="auth", style="primary"),
+        ],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+# ============================================
+# درباره ما
+# ============================================
 
 def get_about_buttons():
     keyboard = [
@@ -128,6 +163,10 @@ def get_teacher_navigation_buttons(subject, current_index, total):
     return InlineKeyboardMarkup(keyboard)
 
 
+# ============================================
+# پکیج‌ها
+# ============================================
+
 def get_packages_buttons(has_start_package=False):
     keyboard = []
     for pkg in DEFAULT_PACKAGES:
@@ -171,18 +210,17 @@ def get_cards_for_payment(cards):
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_invoice_buttons(use_wallet=False):
-    if use_wallet:
-        keyboard = [
-            [InlineKeyboardButton("💰 پرداخت با کیف پول", callback_data="pay_wallet", style="success")],
-            [InlineKeyboardButton("🔗 پرداخت از درگاه", callback_data="pay_gateway", style="primary")],
-            [InlineKeyboardButton("❌ لغو", callback_data="back_to_balance", style="danger")],
-        ]
-    else:
-        keyboard = [
-            [InlineKeyboardButton("🔗 پرداخت از درگاه", callback_data="pay_gateway", style="primary")],
-            [InlineKeyboardButton("❌ لغو", callback_data="back_to_balance", style="danger")],
-        ]
+def get_invoice_buttons(invoice_id):
+    """دکمه‌های پیش‌فاکتور"""
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ پرداخت کردم", callback_data=f"paid_check_{invoice_id}", style="success"),
+            InlineKeyboardButton("🎁 کد تخفیف", callback_data=f"discount_{invoice_id}", style="primary"),
+        ],
+        [
+            InlineKeyboardButton("❌ لغو", callback_data="back_to_balance", style="danger"),
+        ],
+    ]
     return InlineKeyboardMarkup(keyboard)
 
 
@@ -282,7 +320,6 @@ def get_transaction_buttons(transaction_id):
 # ============================================
 
 def get_admin_main_keyboard():
-    """پنل اصلی مدیریت"""
     keyboard = [
         [
             InlineKeyboardButton("👥 کاربران", callback_data="adm_section_users", style="primary"),
@@ -305,6 +342,7 @@ def get_admin_main_keyboard():
             InlineKeyboardButton("⚙️ تنظیمات", callback_data="adm_section_settings", style="primary"),
         ],
         [
+            InlineKeyboardButton("📞 لیست شماره‌ها", callback_data="adm_section_phones", style="success"),
             InlineKeyboardButton("🔴 وضعیت ربات", callback_data="adm_section_toggle", style="danger"),
         ],
     ]
@@ -541,6 +579,21 @@ def get_admin_toggle_keyboard():
         [
             InlineKeyboardButton("🟢 روشن کردن", callback_data="adm_toggle_on", style="success"),
             InlineKeyboardButton("🔴 خاموش کردن", callback_data="adm_toggle_off", style="danger"),
+        ],
+        [
+            InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_back", style="danger"),
+        ],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_admin_phones_keyboard():
+    keyboard = [
+        [
+            InlineKeyboardButton("📊 تعداد شماره‌ها", callback_data="adm_phones_count", style="primary"),
+        ],
+        [
+            InlineKeyboardButton("📁 خروجی CSV", callback_data="adm_phones_csv", style="success"),
         ],
         [
             InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_back", style="danger"),

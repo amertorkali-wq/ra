@@ -12,7 +12,7 @@ import jdatetime
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 if not DATABASE_URL:
-    print("⚠️ هشدار: DATABASE_URL تنظیم نشده! دیتابیس محلی استفاده می‌شود.")
+    print("⚠️ هشدار: DATABASE_URL تنظیم نشده!")
     DATABASE_URL = None
 
 
@@ -88,6 +88,7 @@ def init_db():
             teacher_id BIGINT DEFAULT NULL,
             teacher_username TEXT DEFAULT NULL,
             teacher_name TEXT DEFAULT NULL,
+            teacher_display_name TEXT DEFAULT NULL,
             taken_time TEXT,
             timeout_time TEXT,
             answered_time TEXT,
@@ -144,7 +145,7 @@ def init_db():
         )
     ''')
 
-    # پیام‌های داخل تیکت
+    # پیام‌های تیکت
     c.execute('''
         CREATE TABLE IF NOT EXISTS ticket_messages (
             id SERIAL PRIMARY KEY,
@@ -158,12 +159,13 @@ def init_db():
         )
     ''')
 
-    # کارکنان
+    # کارکنان (با نام نمایشی)
     c.execute('''
         CREATE TABLE IF NOT EXISTS staff (
             id SERIAL PRIMARY KEY,
             user_id BIGINT,
             username TEXT,
+            display_name TEXT,
             role TEXT,
             subject TEXT,
             added_by BIGINT,
@@ -193,6 +195,20 @@ def init_db():
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT
+        )
+    ''')
+
+    # کدهای تخفیف
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS discount_codes (
+            id SERIAL PRIMARY KEY,
+            code TEXT UNIQUE,
+            percent INTEGER,
+            amount BIGINT,
+            max_uses INTEGER,
+            used_count INTEGER DEFAULT 0,
+            active INTEGER DEFAULT 1,
+            created_at TEXT
         )
     ''')
 
@@ -317,6 +333,17 @@ def get_all_users():
     return users
 
 
+def get_all_users_with_phone():
+    """دریافت لیست شماره تلفن‌های ثبت‌شده"""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT user_id, username, first_name, last_name, phone FROM users WHERE phone IS NOT NULL AND phone != ''")
+    rows = c.fetchall()
+    c.close()
+    conn.close()
+    return rows
+
+
 def get_user_role(user_id):
     from config import OWNER_ID
     if user_id == OWNER_ID:
@@ -346,14 +373,29 @@ def is_staff(user_id, role=None):
     return row is not None
 
 
-def add_staff(user_id, role, username=None, subject=None, added_by=None):
+def add_staff(user_id, role, username=None, subject=None, added_by=None, display_name=None):
     conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
     c.execute('''
-        INSERT INTO staff (user_id, username, role, subject, added_by, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s)
-    ''', (user_id, username, role, subject, added_by, now))
+        INSERT INTO staff (user_id, username, display_name, role, subject, added_by, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    ''', (user_id, username, display_name, role, subject, added_by, now))
+    conn.commit()
+    c.close()
+    conn.close()
+
+
+def update_staff(user_id, role=None, **kwargs):
+    if not kwargs:
+        return
+    conn = get_connection()
+    c = conn.cursor()
+    for key, value in kwargs.items():
+        if role:
+            c.execute(f"UPDATE staff SET {key} = %s WHERE user_id = %s AND role = %s", (value, user_id, role))
+        else:
+            c.execute(f"UPDATE staff SET {key} = %s WHERE user_id = %s", (value, user_id))
     conn.commit()
     c.close()
     conn.close()
@@ -379,6 +421,46 @@ def get_staff_list(role):
     c.close()
     conn.close()
     return rows
+
+
+def get_staff_with_display_name(role):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT user_id, username, display_name, subject FROM staff WHERE role = %s", (role,))
+    rows = c.fetchall()
+    c.close()
+    conn.close()
+    return rows
+
+
+def get_staff_by_user(user_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM staff WHERE user_id = %s", (user_id,))
+    rows = c.fetchall()
+    c.close()
+    conn.close()
+    return rows
+
+
+def staff_exists(user_id, role):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT id FROM staff WHERE user_id = %s AND role = %s", (user_id, role))
+    row = c.fetchone()
+    c.close()
+    conn.close()
+    return row is not None
+
+
+def count_owners():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM staff WHERE role = 'owner'")
+    count = c.fetchone()[0]
+    c.close()
+    conn.close()
+    return count
 
 
 # ============================================
@@ -408,7 +490,7 @@ def get_verification_code(user_id):
 # کارت
 # ============================================
 
-def add_card(user_id, card_number, card_holder, photo_file_id):
+def add_card(user_id, card_number, card_holder, photo_file_id=None):
     conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
@@ -587,185 +669,123 @@ def get_expired_questions():
 
 
 # ============================================
-# پاسخ دبیر
+# گزارش صورت‌حساب دبیران — بر اساس دقیقه
 # ============================================
 
-def add_question_reply(question_id, teacher_id, message_id, content, file_id=None):
+def get_teacher_invoice_detail(teacher_id):
+    """گزارش دقیق صورت‌حساب یک دبیر"""
+    conn = get_connection()
+    c = conn.cursor()
+
+    # تعداد کل سوالات پاسخ داده شده
+    c.execute('''
+        SELECT COUNT(*) FROM questions
+        WHERE teacher_id = %s AND status IN ('answered', 'closed')
+    ''', (teacher_id,))
+    total = c.fetchone()[0]
+
+    # سوالات امروز
+    today_str = get_shamsi_date()
+    c.execute('''
+        SELECT COUNT(*) FROM questions
+        WHERE teacher_id = %s AND status IN ('answered', 'closed')
+        AND answered_time LIKE %s
+    ''', (teacher_id, f"{today_str}%"))
+    today = c.fetchone()[0]
+
+    # سوالات این هفته
+    now = jdatetime.datetime.now()
+    week_ago = (now - jdatetime.timedelta(days=7)).strftime("%Y/%m/%d")
+    c.execute('''
+        SELECT COUNT(*) FROM questions
+        WHERE teacher_id = %s AND status IN ('answered', 'closed')
+        AND answered_time >= %s
+    ''', (teacher_id, week_ago))
+    week = c.fetchone()[0]
+
+    # سوالات این ماه
+    month_ago = (now - jdatetime.timedelta(days=30)).strftime("%Y/%m/%d")
+    c.execute('''
+        SELECT COUNT(*) FROM questions
+        WHERE teacher_id = %s AND status IN ('answered', 'closed')
+        AND answered_time >= %s
+    ''', (teacher_id, month_ago))
+    month = c.fetchone()[0]
+
+    c.close()
+    conn.close()
+
+    return {
+        'total': total,
+        'today': today,
+        'week': week,
+        'month': month,
+    }
+
+
+def get_teachers_invoice_full():
+    """گزارش کامل صورت‌حساب همه دبیران"""
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute("SELECT user_id, username, display_name, subject FROM staff WHERE role = 'teacher'")
+    teachers = c.fetchall()
+
+    result = []
+    for tid, uname, dname, subj in teachers:
+        detail = get_teacher_invoice_detail(tid)
+        result.append({
+            'teacher_id': tid,
+            'username': uname,
+            'display_name': dname or uname or str(tid),
+            'subject': subj or 'نامشخص',
+            'total_questions': detail['total'],
+            'today_questions': detail['today'],
+            'week_questions': detail['week'],
+            'month_questions': detail['month'],
+        })
+
+    c.close()
+    conn.close()
+    return result
+
+
+# ============================================
+# کد تخفیف
+# ============================================
+
+def create_discount_code(code, percent=0, amount=0, max_uses=0):
     conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
-    c.execute('''
-        INSERT INTO question_replies (question_id, teacher_id, message_id, content, file_id, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
-    ''', (question_id, teacher_id, message_id, content, file_id, now))
-    reply_id = c.fetchone()[0]
-    conn.commit()
-    c.close()
-    conn.close()
-    return reply_id
+    try:
+        c.execute('''
+            INSERT INTO discount_codes (code, percent, amount, max_uses, created_at)
+            VALUES (%s, %s, %s, %s, %s)
+        ''', (code, percent, amount, max_uses, now))
+        conn.commit()
+        return True
+    except:
+        return False
+    finally:
+        c.close()
+        conn.close()
 
 
-# ============================================
-# تیکت پشتیبانی
-# ============================================
-
-def generate_ticket_code():
+def get_discount_code(code):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM tickets")
-    count = c.fetchone()[0] + 1
-    c.close()
-    conn.close()
-    return f"SUP-{count + 1000}"
-
-
-def create_ticket(user_id, message):
-    conn = get_connection()
-    c = conn.cursor()
-    now = get_shamsi_now()
-    code = generate_ticket_code()
-    c.execute('''
-        INSERT INTO tickets (user_id, ticket_code, message, created_at)
-        VALUES (%s, %s, %s, %s) RETURNING id
-    ''', (user_id, code, message, now))
-    ticket_id = c.fetchone()[0]
-    conn.commit()
-    c.close()
-    conn.close()
-    return ticket_id, code
-
-
-def get_ticket(ticket_id):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT * FROM tickets WHERE id = %s", (ticket_id,))
-    t = c.fetchone()
-    c.close()
-    conn.close()
-    return t
-
-
-def get_user_open_ticket(user_id):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute('''
-        SELECT id, ticket_code, status FROM tickets
-        WHERE user_id = %s AND status IN ('waiting', 'taken', 'answered')
-        ORDER BY id DESC LIMIT 1
-    ''', (user_id,))
+    c.execute("SELECT * FROM discount_codes WHERE code = %s AND active = 1", (code,))
     row = c.fetchone()
     c.close()
     conn.close()
     return row
 
 
-def get_open_ticket_for_support(support_id):
+def use_discount_code(code):
     conn = get_connection()
     c = conn.cursor()
-    c.execute('''
-        SELECT id FROM tickets
-        WHERE support_id = %s AND status IN ('taken', 'answered')
-        LIMIT 1
-    ''', (support_id,))
-    row = c.fetchone()
-    c.close()
-    conn.close()
-    return row[0] if row else None
-
-
-def take_ticket(ticket_id, support_id, support_username, support_name):
-    conn = get_connection()
-    c = conn.cursor()
-    now = get_shamsi_now()
-    from config import SUPPORT_TIMEOUT_HOURS
-    timeout = (jdatetime.datetime.now() + jdatetime.timedelta(hours=SUPPORT_TIMEOUT_HOURS)).strftime("%Y/%m/%d %H:%M:%S")
-    c.execute('''
-        UPDATE tickets
-        SET status = 'taken',
-            support_id = %s,
-            support_username = %s,
-            support_name = %s,
-            support_taken_time = %s,
-            timeout_time = %s
-        WHERE id = %s
-    ''', (support_id, support_username, support_name, now, timeout, ticket_id))
-    conn.commit()
-    c.close()
-    conn.close()
-
-
-def reply_ticket(ticket_id, reply, new_timeout_hours=24):
-    conn = get_connection()
-    c = conn.cursor()
-    now = get_shamsi_now()
-    timeout = (jdatetime.datetime.now() + jdatetime.timedelta(hours=new_timeout_hours)).strftime("%Y/%m/%d %H:%M:%S")
-    c.execute('''
-        UPDATE tickets
-        SET reply = %s, status = 'answered', replied_time = %s, timeout_time = %s
-        WHERE id = %s
-    ''', (reply, now, timeout, ticket_id))
-    conn.commit()
-    c.close()
-    conn.close()
-
-
-def close_ticket(ticket_id):
-    conn = get_connection()
-    c = conn.cursor()
-    now = get_shamsi_now()
-    c.execute('''
-        UPDATE tickets
-        SET status = 'closed', closed_time = %s
-        WHERE id = %s
-    ''', (now, ticket_id))
-    conn.commit()
-    c.close()
-    conn.close()
-
-
-def get_expired_tickets():
-    conn = get_connection()
-    c = conn.cursor()
-    now = get_shamsi_now()
-    c.execute('''
-        SELECT id, ticket_code FROM tickets
-        WHERE status IN ('waiting', 'taken', 'answered')
-          AND timeout_time IS NOT NULL
-          AND timeout_time < %s
-    ''', (now,))
-    rows = c.fetchall()
-    c.close()
-    conn.close()
-    return rows
-
-
-def add_ticket_message(ticket_id, sender_type, sender_id, message_id, content, file_id=None):
-    conn = get_connection()
-    c = conn.cursor()
-    now = get_shamsi_now()
-    c.execute('''
-        INSERT INTO ticket_messages (ticket_id, sender_type, sender_id, message_id, content, file_id, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
-    ''', (ticket_id, sender_type, sender_id, message_id, content, file_id, now))
-    msg_id = c.fetchone()[0]
-    conn.commit()
-    c.close()
-    conn.close()
-    return msg_id
-
-
-# ============================================
-# تراکنش
-# ============================================
-
-def add_transaction(user_id, amount, card_number, transaction_id, status, type_):
-    conn = get_connection()
-    c = conn.cursor()
-    now = get_shamsi_now()
-    c.execute('''
-        INSERT INTO transactions (user_id, amount, card_number, transaction_id, status, type, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    ''', (user_id, amount, card_number, transaction_id, status, type_, now))
+    c.execute("UPDATE discount_codes SET used_count = used_count + 1 WHERE code = %s", (code,))
     conn.commit()
     c.close()
     conn.close()
@@ -790,16 +810,6 @@ def create_payment_record(user_id, authority, amount, description, card_id=None)
     return payment_id
 
 
-def get_payment_by_authority(authority):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT * FROM payments WHERE authority = %s", (authority,))
-    p = c.fetchone()
-    c.close()
-    conn.close()
-    return p
-
-
 def update_payment_status(authority, status, ref_id=None, card_pan=None):
     conn = get_connection()
     c = conn.cursor()
@@ -817,126 +827,21 @@ def update_payment_status(authority, status, ref_id=None, card_pan=None):
     conn.close()
 
 
-# ============================================
-# آمار
-# ============================================
-
-def get_stats():
+def add_transaction(user_id, amount, card_number, transaction_id, status, type_):
     conn = get_connection()
     c = conn.cursor()
-
-    c.execute("SELECT COUNT(*) FROM users")
-    total_users = c.fetchone()[0]
-
-    c.execute("SELECT COUNT(*) FROM questions")
-    total_questions = c.fetchone()[0]
-
-    c.execute("SELECT COUNT(*) FROM questions WHERE status = 'waiting'")
-    waiting = c.fetchone()[0]
-
-    c.execute("SELECT COUNT(*) FROM questions WHERE status IN ('answered', 'closed')")
-    answered = c.fetchone()[0]
-
-    c.execute("SELECT COUNT(*) FROM questions WHERE subject = 'زیست'")
-    bio = c.fetchone()[0]
-
-    c.execute("SELECT COUNT(*) FROM questions WHERE subject = 'شیمی'")
-    chem = c.fetchone()[0]
-
-    c.execute("SELECT COUNT(*) FROM questions WHERE subject = 'فیزیک'")
-    phys = c.fetchone()[0]
-
-    c.execute("SELECT COUNT(*) FROM questions WHERE subject = 'ریاضی'")
-    math = c.fetchone()[0]
-
-    c.execute("SELECT SUM(amount) FROM transactions WHERE status = 'success'")
-    income = c.fetchone()[0] or 0
-
+    now = get_shamsi_now()
+    c.execute('''
+        INSERT INTO transactions (user_id, amount, card_number, transaction_id, status, type, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    ''', (user_id, amount, card_number, transaction_id, status, type_, now))
+    conn.commit()
     c.close()
     conn.close()
-
-    return {
-        'total_users': total_users,
-        'total_questions': total_questions,
-        'waiting': waiting,
-        'answered': answered,
-        'bio': bio,
-        'chem': chem,
-        'phys': phys,
-        'math': math,
-        'income': income,
-    }
 
 
 # ============================================
-# توابع مدیریت ادمین/مالک/کارکنان
-# ============================================
-
-def get_staff_by_id(staff_id):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT * FROM staff WHERE id = %s", (staff_id,))
-    row = c.fetchone()
-    c.close()
-    conn.close()
-    return row
-
-
-def get_staff_user(user_id, role=None):
-    conn = get_connection()
-    c = conn.cursor()
-    if role:
-        c.execute("SELECT * FROM staff WHERE user_id = %s AND role = %s", (user_id, role))
-    else:
-        c.execute("SELECT * FROM staff WHERE user_id = %s", (user_id,))
-    rows = c.fetchall()
-    c.close()
-    conn.close()
-    return rows
-
-
-def staff_exists(user_id, role):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT id FROM staff WHERE user_id = %s AND role = %s", (user_id, role))
-    row = c.fetchone()
-    c.close()
-    conn.close()
-    return row is not None
-
-
-def get_all_owners():
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT user_id FROM staff WHERE role = 'owner'")
-    rows = [row[0] for row in c.fetchall()]
-    c.close()
-    conn.close()
-    return rows
-
-
-def count_staff_by_role(role):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM staff WHERE role = %s", (role,))
-    count = c.fetchone()[0]
-    c.close()
-    conn.close()
-    return count
-
-
-def count_owners():
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM staff WHERE role = 'owner'")
-    count = c.fetchone()[0]
-    c.close()
-    conn.close()
-    return count
-
-
-# ============================================
-# آمار واقعی
+# آمار
 # ============================================
 
 def get_users_stats():
@@ -1039,65 +944,16 @@ def get_income_stats():
     return {'today': today, 'week': week, 'month': month}
 
 
-def get_teachers_invoice():
-    conn = get_connection()
-    c = conn.cursor()
-
-    c.execute("SELECT user_id, username, subject FROM staff WHERE role = 'teacher'")
-    teachers = c.fetchall()
-
-    result = []
-    for tid, uname, subj in teachers:
-        c.execute("SELECT COUNT(*) FROM questions WHERE teacher_id = %s AND status IN ('answered', 'closed')", (tid,))
-        total = c.fetchone()[0]
-        result.append({
-            'teacher_id': tid,
-            'username': uname,
-            'subject': subj,
-            'total_questions': total,
-            'start_questions': 0,
-            'normal_questions': total,
-        })
-
-    c.close()
-    conn.close()
-    return result
-
-
-def reset_teacher_invoice():
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("UPDATE questions SET teacher_invoice_counted = 0 WHERE teacher_invoice_counted = 1")
-    conn.commit()
-    c.close()
-    conn.close()
-
-
-def get_user_purchases(user_id):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("""
-        SELECT id, amount, type, status, created_at 
-        FROM transactions 
-        WHERE user_id = %s 
-        ORDER BY id DESC 
-        LIMIT 20
-    """, (user_id,))
-    rows = c.fetchall()
-    c.close()
-    conn.close()
-    return rows
-
+# ============================================
+# کاربران فعال / خریداران / شماره‌ها
+# ============================================
 
 def get_active_users(days=30):
     conn = get_connection()
     c = conn.cursor()
     now = jdatetime.datetime.now()
     cutoff = (now - jdatetime.timedelta(days=days)).strftime("%Y/%m/%d")
-    c.execute("""
-        SELECT DISTINCT user_id FROM questions 
-        WHERE created_at >= %s
-    """, (cutoff,))
+    c.execute("SELECT DISTINCT user_id FROM questions WHERE created_at >= %s", (cutoff,))
     users = [row[0] for row in c.fetchall()]
     c.close()
     conn.close()
@@ -1107,11 +963,50 @@ def get_active_users(days=30):
 def get_package_buyers():
     conn = get_connection()
     c = conn.cursor()
-    c.execute("""
-        SELECT DISTINCT user_id FROM transactions 
-        WHERE type = 'package' AND status = 'success'
-    """)
+    c.execute("SELECT DISTINCT user_id FROM transactions WHERE type = 'package' AND status = 'success'")
     users = [row[0] for row in c.fetchall()]
     c.close()
     conn.close()
     return users
+
+
+def get_user_purchases(user_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute('''
+        SELECT id, amount, type, status, created_at 
+        FROM transactions 
+        WHERE user_id = %s 
+        ORDER BY id DESC 
+        LIMIT 20
+    ''', (user_id,))
+    rows = c.fetchall()
+    c.close()
+    conn.close()
+    return rows
+
+
+def export_phone_list():
+    """خروجی لیست شماره‌ها برای اکسل"""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute('''
+        SELECT user_id, username, first_name, last_name, phone, created_at
+        FROM users 
+        WHERE phone IS NOT NULL AND phone != ''
+        ORDER BY user_id
+    ''')
+    rows = c.fetchall()
+    c.close()
+    conn.close()
+    return rows
+
+
+def get_total_phones_count():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM users WHERE phone IS NOT NULL AND phone != ''")
+    count = c.fetchone()[0]
+    c.close()
+    conn.close()
+    return count
