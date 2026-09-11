@@ -44,7 +44,10 @@ def get_back_keyboard():
 
 
 def get_cancel_question_keyboard():
-    keyboard = [[KeyboardButton("❌ لغو سوال", style="danger")]]
+    keyboard = [
+        [KeyboardButton("❌ لغو سوال", style="danger")],
+        [KeyboardButton("🏠 منوی اصلی", style="primary")],
+    ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
@@ -77,14 +80,10 @@ def get_balance_buttons():
 
 def get_auth_buttons():
     keyboard = [
-        [
-            InlineKeyboardButton("🧾 لیست کارت‌ها", callback_data="card_list", style="primary"),
-            InlineKeyboardButton("➕ افزودن کارت", callback_data="add_card", style="success"),
-        ],
-        [
-            InlineKeyboardButton("➖ حذف کارت", callback_data="remove_card", style="danger"),
-            InlineKeyboardButton("🔙 منوی اصلی", callback_data="back_to_main", style="danger"),
-        ],
+        [InlineKeyboardButton("🧾 لیست کارت‌ها", callback_data="card_list", style="primary")],
+        [InlineKeyboardButton("➕ افزودن کارت", callback_data="add_card", style="success")],
+        [InlineKeyboardButton("➖ حذف کارت", callback_data="remove_card", style="danger")],
+        [InlineKeyboardButton("🔙 بازگشت به افزایش موجودی", callback_data="back_to_balance", style="danger")],
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -100,16 +99,14 @@ def get_cards_delete_buttons(cards):
                 style="danger"
             )
         ])
-    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="auth", style="danger")])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت به لیست کارت‌ها", callback_data="card_list", style="danger")])
     return InlineKeyboardMarkup(keyboard)
 
 
 def get_delete_confirm_buttons(card_id):
     keyboard = [
-        [
-            InlineKeyboardButton("✅ بله، حذف شود", callback_data=f"confirm_del_card_{card_id}", style="danger"),
-            InlineKeyboardButton("❌ انصراف", callback_data="auth", style="primary"),
-        ],
+        [InlineKeyboardButton("✅ بله، حذف شود", callback_data=f"confirm_del_card_{card_id}", style="danger")],
+        [InlineKeyboardButton("❌ انصراف", callback_data="card_list", style="primary")],
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -204,7 +201,7 @@ def get_cards_for_payment(cards):
             callback_data=f"pay_card_{card[0]}",
             style="success"
         )])
-    keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="back_to_balance", style="danger")])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت به پکیج‌ها", callback_data="back_to_packages", style="danger")])
     return InlineKeyboardMarkup(keyboard)
 
 

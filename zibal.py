@@ -1,6 +1,7 @@
 import os
 import requests
 import time
+from config import ZIBAL_SANDBOX
 
 ZIBAL_MERCHANT = os.environ.get("ZIBAL_MERCHANT", "zibal")
 
@@ -27,12 +28,21 @@ ZIBAL_RESULT_CODES = {
 }
 
 
+def get_merchant():
+    """در حالت sandbox از zibal استفاده می‌کند"""
+    if ZIBAL_SANDBOX:
+        return "zibal"
+    return ZIBAL_MERCHANT
+
+
 def generate_order_id(user_id):
     return f"VIOLEX-{user_id}-{int(time.time())}"
 
 
 def create_payment(amount, description, callback_url=None, mobile=None, order_id=None):
-    if not ZIBAL_MERCHANT:
+    merchant = get_merchant()
+
+    if not merchant:
         return {"success": False, "error": "مرچنت تنظیم نشده", "code": -1}
 
     amount_rial = amount * 10
@@ -41,7 +51,7 @@ def create_payment(amount, description, callback_url=None, mobile=None, order_id
         callback_url = "https://violexq.ir/payment/callback"
 
     payload = {
-        "merchant": ZIBAL_MERCHANT,
+        "merchant": merchant,
         "amount": amount_rial,
         "description": description,
         "callbackUrl": callback_url,
@@ -83,13 +93,15 @@ def create_payment(amount, description, callback_url=None, mobile=None, order_id
 
 
 def verify_payment(track_id, amount):
-    if not ZIBAL_MERCHANT:
+    merchant = get_merchant()
+
+    if not merchant:
         return {"success": False, "error": "مرچنت تنظیم نشده"}
 
     amount_rial = amount * 10
 
     payload = {
-        "merchant": ZIBAL_MERCHANT,
+        "merchant": merchant,
         "amount": amount_rial,
         "trackId": int(track_id),
     }
@@ -128,10 +140,11 @@ def verify_payment(track_id, amount):
 
 
 def inquiry_payment(track_id):
-    if not ZIBAL_MERCHANT:
+    merchant = get_merchant()
+    if not merchant:
         return {"success": False, "error": "مرچنت تنظیم نشده"}
 
-    payload = {"merchant": ZIBAL_MERCHANT, "trackId": int(track_id)}
+    payload = {"merchant": merchant, "trackId": int(track_id)}
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
 
     try:

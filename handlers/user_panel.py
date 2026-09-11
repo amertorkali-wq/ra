@@ -246,13 +246,31 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
     # ---- خرید پکیج ----
     elif data == "buy_package":
         cards = get_verified_cards(user_id)
+        all_cards = get_user_cards(user_id)
+
         if not cards:
+            # بررسی کن که آیا کارت در انتظار تأیید داره یا نه
+            pending_cards = [c for c in all_cards if not c[5]]
+
+            if pending_cards:
+                text = (
+                    "⏳ *شما کارت در انتظار تأیید دارید.*\n\n"
+                    "کارت شما هنوز توسط حسابدار تأیید نشده است.\n"
+                    "لطفاً تا تأیید کارت صبر کنید.\n\n"
+                    "💡 پس از تأیید، به شما اطلاع داده می‌شود."
+                )
+            else:
+                text = (
+                    "❗ *شما هنوز کارت بانکی تأیید شده‌ای ندارید.*\n\n"
+                    "لطفاً از بخش «احراز هویت» اقدام کنید."
+                )
+
             try:
                 await query.edit_message_text(
-                    "❗ *شما هنوز کارت بانکی تأیید شده‌ای ندارید.*\n\n"
-                    "لطفاً از بخش «احراز هویت» اقدام کنید.",
+                    text,
                     reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🪪 احراز هویت", callback_data="auth", style="primary")]
+                        [InlineKeyboardButton("🪪 احراز هویت", callback_data="auth", style="primary")],
+                        [InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_balance", style="danger")],
                     ]),
                     parse_mode="Markdown"
                 )
@@ -632,7 +650,7 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await query.edit_message_text(
                     RULES_FOR_AUTH_TEXT,
                     reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🔙 برگشت", callback_data="auth", style="danger")]
+                        [InlineKeyboardButton("🔙 بازگشت به احراز هویت", callback_data="auth", style="danger")]
                     ]),
                     parse_mode="Markdown"
                 )
@@ -651,7 +669,7 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
                     "➕ برای افزودن کارت، *شماره کارت* خود را وارد کنید.\n"
                     "فقط کارت‌هایی که به نام شما هستند قابل ثبت‌اند ⚠️",
                     reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🔙 برگشت", callback_data="auth", style="danger")]
+                        [InlineKeyboardButton("🔙 بازگشت به احراز هویت", callback_data="auth", style="danger")]
                     ]),
                     parse_mode="Markdown"
                 )
@@ -695,7 +713,7 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
                 f"*اگر این کارت را می‌خواهید حذف کنید، روی دکمه «حذف» بزنید 🗑️*",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("🗑 حذف", callback_data=f"confirm_del_card_{card_id}", style="danger")],
-                    [InlineKeyboardButton("❌ انصراف", callback_data="auth", style="primary")],
+                    [InlineKeyboardButton("❌ انصراف", callback_data="card_list", style="primary")],
                 ]),
                 parse_mode="Markdown"
             )
@@ -714,10 +732,21 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         masked = f"{card[2][:4]} **** **** {card[2][-4:]}"
         delete_card(card_id)
 
+        # بعد از حذف، برگرد به لیست کارت‌ها
+        cards = get_user_cards(user_id)
+        if cards:
+            text = "🧾 *لیست کارت‌های شما:*\n\n"
+            for i, c in enumerate(cards):
+                m = f"{c[2][:4]} **** **** {c[2][-4:]}"
+                status = "✅ تأیید شده" if c[5] else "⏳ در انتظار تأیید"
+                star = "⭐ " if c[6] else ""
+                text += f"{i+1}️⃣ {star}`{m}`\n   وضعیت: {status}\n\n"
+        else:
+            text = "🧾 *شما هیچ کارتی ثبت نکرده‌اید.*"
+
         try:
             await query.edit_message_text(
-                f"*🗑️ کارت {masked} با موفقیت حذف شد!*\n"
-                f"⚠️ دیگر امکان پرداخت با این کارت وجود ندارد.",
+                f"🗑️ کارت {masked} با موفقیت حذف شد!\n\n{text}",
                 reply_markup=get_auth_buttons(),
                 parse_mode="Markdown"
             )
@@ -735,18 +764,15 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         except:
             pass
 
-    # ---- بازگشت به منوی اصلی ----
-    elif data == "back_to_main":
-        clear_user_states(context)
+    # ---- بازگشت به افزایش موجودی ----
+    elif data == "back_to_balance":
         try:
-            await query.message.delete()
+            await query.edit_message_text(
+                INCREASE_BALANCE_TEXT,
+                reply_markup=get_balance_buttons()
+            )
         except:
             pass
-        await query.message.reply_text(
-            MAIN_MENU_TEXT,
-            reply_markup=get_main_menu_keyboard(),
-            parse_mode="Markdown"
-        )
 
 
 # ============================================
@@ -902,10 +928,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     main_menu_buttons = [
-        "👤 حساب من", "🤝 دعوت دوستان", "📋 درباره ما",
-        "☎️ پشتیبانی", "🆘 قوانین", "📖 راهنما",
-        "📚 ارسال سوال", "💸 افزایش موجودی",
-        "🔙 برگشت", "❌ لغو سوال", "❌ لغو تیکت",
+        "👤 حساب من",
+        "🤝 دعوت دوستان",
+        "📋 درباره ما",
+        "☎️ پشتیبانی",
+        "🆘 قوانین",
+        "📖 راهنما",
+        "📚 ارسال سوال",
+        "💸 افزایش موجودی",
+        "🔙 برگشت",
+        "🏠 منوی اصلی",
+        "❌ لغو سوال",
+        "❌ لغو تیکت",
         "📫 ارسال تیکت"
     ]
 
@@ -1235,6 +1269,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🔙 برگشت":
         clear_user_states(context)
         await update.message.reply_text(MAIN_MENU_TEXT, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
+
+    elif text == "🏠 منوی اصلی":
+        clear_user_states(context)
+        await update.message.reply_text(
+            MAIN_MENU_TEXT,
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode="Markdown"
+        )
 
     elif context.user_data.get('awaiting_description'):
         context.user_data['awaiting_description'] = False
