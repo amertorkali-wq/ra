@@ -278,22 +278,40 @@ def get_transaction_buttons(transaction_id):
 
 
 # ============================================
-# پنل مدیریت
+# پنل مدیریت - چیدمان گروه‌بندی‌شده
 # ============================================
 
 def get_admin_panel_keyboard():
     keyboard = [
-        [InlineKeyboardButton("👤 مدیریت ادمین‌ها", callback_data="adm_manage_admins", style="primary")],
-        [InlineKeyboardButton("🫅🏻 مدیریت مالک", callback_data="adm_manage_owners", style="primary")],
-        [InlineKeyboardButton("👨‍🏫 مدیریت دبیران", callback_data="adm_manage_teachers", style="success")],
-        [InlineKeyboardButton("🧑🏻‍💻 مدیریت کادر", callback_data="adm_manage_staff", style="primary")],
-        [InlineKeyboardButton("👫 مدیریت کاربران", callback_data="adm_manage_users", style="primary")],
-        [InlineKeyboardButton("📊 آمار ربات", callback_data="adm_stats", style="primary")],
-        [InlineKeyboardButton("💸 صورت حساب", callback_data="adm_invoices", style="success")],
-        [InlineKeyboardButton("📣 پیام همگانی", callback_data="adm_broadcast", style="primary")],
-        [InlineKeyboardButton("🎁 هدیه به کاربران", callback_data="adm_gift", style="success")],
-        [InlineKeyboardButton("⚙️ تنظیمات ربات", callback_data="adm_settings", style="primary")],
-        [InlineKeyboardButton("🚫 روشن/خاموش", callback_data="adm_toggle", style="danger")],
+        # ردیف ۱: مدیریت‌ها
+        [
+            InlineKeyboardButton("👥 مدیریت ادمین‌ها", callback_data="adm_manage_admins", style="primary"),
+            InlineKeyboardButton("👑 مدیریت مالک", callback_data="adm_manage_owners", style="primary"),
+        ],
+        # ردیف ۲: دبیران و کادر
+        [
+            InlineKeyboardButton("👨‍🏫 مدیریت دبیران", callback_data="adm_manage_teachers", style="success"),
+            InlineKeyboardButton("👨‍💼 مدیریت کادر", callback_data="adm_manage_staff", style="success"),
+        ],
+        # ردیف ۳: کاربران و آمار
+        [
+            InlineKeyboardButton("👫 مدیریت کاربران", callback_data="adm_manage_users", style="primary"),
+            InlineKeyboardButton("📊 آمار ربات", callback_data="adm_stats", style="primary"),
+        ],
+        # ردیف ۴: مالی و هدیه
+        [
+            InlineKeyboardButton("💰 صورت حساب", callback_data="adm_invoices", style="success"),
+            InlineKeyboardButton("🎁 هدیه به کاربران", callback_data="adm_gift", style="success"),
+        ],
+        # ردیف ۵: پیام و تنظیمات
+        [
+            InlineKeyboardButton("📣 پیام همگانی", callback_data="adm_broadcast", style="primary"),
+            InlineKeyboardButton("⚙️ تنظیمات ربات", callback_data="adm_settings", style="primary"),
+        ],
+        # ردیف ۶: روشن/خاموش (تک دکمه)
+        [
+            InlineKeyboardButton("🚫 روشن/خاموش", callback_data="adm_toggle", style="danger"),
+        ],
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -305,42 +323,66 @@ def get_admin_back_button():
 
 def get_teacher_management_buttons():
     keyboard = [
-        [InlineKeyboardButton("➕ افزودن دبیر", callback_data="adm_teacher_add", style="success")],
-        [InlineKeyboardButton("🗑 حذف دبیر", callback_data="adm_teacher_remove", style="danger")],
-        [InlineKeyboardButton("📋 لیست دبیران", callback_data="adm_teacher_list", style="primary")],
-        [InlineKeyboardButton("📝 ویرایش اطلاعات دبیر", callback_data="adm_teacher_edit", style="primary")],
-        [InlineKeyboardButton("🔁 اتصال دبیر به درس", callback_data="adm_teacher_connect", style="primary")],
-        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
+        [
+            InlineKeyboardButton("➕ افزودن دبیر", callback_data="adm_teacher_add", style="success"),
+            InlineKeyboardButton("🗑 حذف دبیر", callback_data="adm_teacher_remove", style="danger"),
+        ],
+        [
+            InlineKeyboardButton("📋 لیست دبیران", callback_data="adm_teacher_list", style="primary"),
+            InlineKeyboardButton("📝 ویرایش اطلاعات", callback_data="adm_teacher_edit", style="primary"),
+        ],
+        [
+            InlineKeyboardButton("🔁 اتصال دبیر به درس", callback_data="adm_teacher_connect", style="primary"),
+        ],
+        [
+            InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger"),
+        ],
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
 def get_subject_buttons(prefix=""):
     keyboard = [
-        [InlineKeyboardButton("🧬 زیست", callback_data=f"{prefix}bio", style="success")],
-        [InlineKeyboardButton("🧪 شیمی", callback_data=f"{prefix}chem", style="primary")],
-        [InlineKeyboardButton("⚡️ فیزیک", callback_data=f"{prefix}phys", style="primary")],
-        [InlineKeyboardButton("📐 ریاضی", callback_data=f"{prefix}math", style="success")],
-        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
+        [
+            InlineKeyboardButton("🧬 زیست", callback_data=f"{prefix}bio", style="success"),
+            InlineKeyboardButton("🧪 شیمی", callback_data=f"{prefix}chem", style="primary"),
+        ],
+        [
+            InlineKeyboardButton("⚡️ فیزیک", callback_data=f"{prefix}phys", style="primary"),
+            InlineKeyboardButton("📐 ریاضی", callback_data=f"{prefix}math", style="success"),
+        ],
+        [
+            InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger"),
+        ],
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
 def get_staff_management_buttons():
     keyboard = [
-        [InlineKeyboardButton("☎️ مدیریت پشتیبان‌ها", callback_data="adm_support_manage", style="primary")],
-        [InlineKeyboardButton("🧮 مدیریت حسابدارها", callback_data="adm_accountant_manage", style="success")],
-        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
+        [
+            InlineKeyboardButton("☎️ مدیریت پشتیبان‌ها", callback_data="adm_support_manage", style="primary"),
+            InlineKeyboardButton("🧮 مدیریت حسابدارها", callback_data="adm_accountant_manage", style="success"),
+        ],
+        [
+            InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger"),
+        ],
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
 def get_user_management_buttons():
     keyboard = [
-        [InlineKeyboardButton("🔍 جستجوی کاربر", callback_data="adm_user_search", style="primary")],
-        [InlineKeyboardButton("🚫 مسدود / رفع مسدود", callback_data="adm_user_block", style="danger")],
-        [InlineKeyboardButton("🎁 ارسال هدیه", callback_data="adm_user_gift", style="success")],
-        [InlineKeyboardButton("💳 مشاهده خریدها", callback_data="adm_user_purchases", style="primary")],
-        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger")],
+        [
+            InlineKeyboardButton("🔍 جستجوی کاربر", callback_data="adm_user_search", style="primary"),
+            InlineKeyboardButton("🚫 مسدود / رفع مسدود", callback_data="adm_user_block", style="danger"),
+        ],
+        [
+            InlineKeyboardButton("🎁 ارسال هدیه", callback_data="adm_user_gift", style="success"),
+            InlineKeyboardButton("💳 مشاهده خریدها", callback_data="adm_user_purchases", style="primary"),
+        ],
+        [
+            InlineKeyboardButton("🔙 بازگشت", callback_data="adm_back", style="danger"),
+        ],
     ]
     return InlineKeyboardMarkup(keyboard)
