@@ -27,10 +27,6 @@ def is_teacher(user_id):
     )
 
 
-# ============================================
-# دبیران - پاسخ به سوال
-# ============================================
-
 async def teacher_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
@@ -264,11 +260,10 @@ async def handle_followup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# درباره ما - نمایش اطلاعات دبیران (فقط ویرایش)
+# درباره ما - نمایش اطلاعات دبیران (ویرایش)
 # ============================================
 
 async def show_teacher_bio(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نمایش اطلاعات اولین دبیر یک درس با ویرایش پیام"""
     query = update.callback_query
     await query.answer()
 
@@ -295,7 +290,6 @@ async def show_teacher_bio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_teacher_navigation_buttons(subject, 0, len(teachers))
 
     try:
-        # ویرایش پیام فعلی
         if image_url:
             await query.edit_message_media(
                 media=InputMediaPhoto(
@@ -332,12 +326,13 @@ async def show_teacher_bio(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def navigate_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """ناوبری بین دبیران (ویرایش، پاک نمی‌شود)"""
     query = update.callback_query
     await query.answer()
 
     data = query.data
     parts = data.split("_")
+    # parts[0] = "teacher", parts[1] = "next"/"prev", parts[2] = subject, parts[3] = index
+    action = parts[1]
     subject = parts[2]
     index = int(parts[3])
 
@@ -388,12 +383,10 @@ async def navigate_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def back_to_about(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """بازگشت به لیست دبیران با عکس درباره ما"""
     query = update.callback_query
     await query.answer()
 
     try:
-        # اگر عکس درباره ما وجود دارد، عکس رو با متن نمایش بده
         if ABOUT_IMAGE_URL:
             await query.edit_message_media(
                 media=InputMediaPhoto(
@@ -404,7 +397,6 @@ async def back_to_about(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=get_about_buttons()
             )
         else:
-            # اگر عکس نبود، فقط متن
             try:
                 await query.edit_message_caption(
                     caption=ABOUT_US_TEXT,
@@ -419,7 +411,6 @@ async def back_to_about(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
     except Exception as e:
         print(f"Error back_to_about (edit): {e}")
-        # اگر ویرایش نشد، پیام جدید بفرست (پیام قبلی رو پاک نکن)
         try:
             if ABOUT_IMAGE_URL:
                 await query.message.reply_photo(

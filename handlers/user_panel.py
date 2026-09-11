@@ -797,7 +797,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     if text in main_menu_buttons:
-        # فقط حالت‌های مربوطه رو پاک کن، نه awaiting_support_message
         if text not in ["📫 ارسال تیکت", "❌ لغو تیکت"]:
             clear_user_states(context)
 
@@ -1027,51 +1026,52 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
     elif text == "📫 ارسال تیکت":
+        user_message = context.user_data.get('support_message', '').strip()
+        
         if context.user_data.get('awaiting_support_message'):
-            user_message = context.user_data.get('support_message', '')
-            if not user_message:
+            if user_message:
+                context.user_data['awaiting_support_message'] = False
+                context.user_data.pop('support_message', None)
+                ticket_id, ticket_code = create_ticket(user_id, user_message)
+
+                try:
+                    await context.bot.send_message(
+                        chat_id=SUPPORT_GROUP,
+                        text=(
+                            f"📩 *درخواست جدید پشتیبانی*\n\n"
+                            f"🆔 کد پیگیری: `{ticket_code}`\n"
+                            f"👤 کاربر: @{user.username or 'ندارد'}\n"
+                            f"🆔 ID: `{user_id}`\n"
+                            f"📱 شماره: `{user_info.get('phone', 'نامشخص')}`\n"
+                            f"🕐 زمان: {get_shamsi_now()}\n\n"
+                            f"📝 *پیام کاربر:*\n{user_message}"
+                        ),
+                        parse_mode="Markdown",
+                        reply_markup=InlineKeyboardMarkup([
+                            [
+                                InlineKeyboardButton("✅ پاسخ دادن", callback_data=f"sup_answer_{ticket_id}", style="success"),
+                                InlineKeyboardButton("❌ بستن", callback_data=f"sup_close_{ticket_id}", style="danger"),
+                            ]
+                        ])
+                    )
+                except Exception as e:
+                    print(f"Error sending to support: {e}")
+
                 await update.message.reply_text(
-                    "⚠️ *لطفاً اول پیام خود را ارسال کنید.*",
+                    SUPPORT_TICKET_CREATED.format(ticket_code=ticket_code),
+                    reply_markup=get_main_menu_keyboard(),
+                    parse_mode="Markdown"
+                )
+            else:
+                await update.message.reply_text(
+                    "⚠️ *لطفاً اول پیام خود را ارسال کنید.*\n\n"
+                    "پیام خود را بنویسید و سپس روی «📫 ارسال تیکت» بزنید.",
                     parse_mode="Markdown",
                     reply_markup=get_cancel_ticket_keyboard()
                 )
-                return
-
-            context.user_data['awaiting_support_message'] = False
-            context.user_data.pop('support_message', None)
-            ticket_id, ticket_code = create_ticket(user_id, user_message)
-
-            try:
-                await context.bot.send_message(
-                    chat_id=SUPPORT_GROUP,
-                    text=(
-                        f"📩 *درخواست جدید پشتیبانی*\n\n"
-                        f"🆔 کد پیگیری: `{ticket_code}`\n"
-                        f"👤 کاربر: @{user.username or 'ندارد'}\n"
-                        f"🆔 ID: `{user_id}`\n"
-                        f"📱 شماره: `{user_info.get('phone', 'نامشخص')}`\n"
-                        f"🕐 زمان: {get_shamsi_now()}\n\n"
-                        f"📝 *پیام کاربر:*\n{user_message}"
-                    ),
-                    parse_mode="Markdown",
-                    reply_markup=InlineKeyboardMarkup([
-                        [
-                            InlineKeyboardButton("✅ پاسخ دادن", callback_data=f"sup_answer_{ticket_id}", style="success"),
-                            InlineKeyboardButton("❌ بستن", callback_data=f"sup_close_{ticket_id}", style="danger"),
-                        ]
-                    ])
-                )
-            except Exception as e:
-                print(f"Error sending to support: {e}")
-
-            await update.message.reply_text(
-                SUPPORT_TICKET_CREATED.format(ticket_code=ticket_code),
-                reply_markup=get_main_menu_keyboard(),
-                parse_mode="Markdown"
-            )
         else:
             await update.message.reply_text(
-                "⚠️ *لطفاً ابتدا از منوی «پشتیبانی» اقدام کنید.*",
+                "⚠️ *لطفاً ابتدا از منوی «☎️ پشتیبانی» اقدام کنید.*",
                 reply_markup=get_main_menu_keyboard()
             )
 
@@ -1084,7 +1084,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
-    elif context.user_data.get('awaiting_support_message'):
+    elif context.user_data.get('awaiting_support_message') and text not in main_menu_buttons:
         context.user_data['support_message'] = text
         await update.message.reply_text(
             "✅ *پیام شما دریافت شد.*\n\n"
