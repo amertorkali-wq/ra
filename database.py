@@ -17,15 +17,11 @@ if not DATABASE_URL:
 
 
 def get_connection():
-    """اتصال به PostgreSQL"""
     if not DATABASE_URL:
         raise Exception("DATABASE_URL تنظیم نشده است")
-    
-    # Railway از postgres:// استفاده می‌کند، اما psycopg2 به postgresql:// نیاز دارد
     url = DATABASE_URL
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql://", 1)
-    
     conn = psycopg2.connect(url)
     return conn
 
@@ -96,6 +92,7 @@ def init_db():
             timeout_time TEXT,
             answered_time TEXT,
             closed_time TEXT,
+            teacher_invoice_counted INTEGER DEFAULT 1,
             created_at TEXT
         )
     ''')
@@ -775,7 +772,7 @@ def add_transaction(user_id, amount, card_number, transaction_id, status, type_)
 
 
 # ============================================
-# پرداخت زرین‌پال
+# پرداخت زیبال
 # ============================================
 
 def create_payment_record(user_id, authority, amount, description, card_id=None):
@@ -869,3 +866,252 @@ def get_stats():
         'math': math,
         'income': income,
     }
+
+
+# ============================================
+# توابع مدیریت ادمین/مالک/کارکنان
+# ============================================
+
+def get_staff_by_id(staff_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM staff WHERE id = %s", (staff_id,))
+    row = c.fetchone()
+    c.close()
+    conn.close()
+    return row
+
+
+def get_staff_user(user_id, role=None):
+    conn = get_connection()
+    c = conn.cursor()
+    if role:
+        c.execute("SELECT * FROM staff WHERE user_id = %s AND role = %s", (user_id, role))
+    else:
+        c.execute("SELECT * FROM staff WHERE user_id = %s", (user_id,))
+    rows = c.fetchall()
+    c.close()
+    conn.close()
+    return rows
+
+
+def staff_exists(user_id, role):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT id FROM staff WHERE user_id = %s AND role = %s", (user_id, role))
+    row = c.fetchone()
+    c.close()
+    conn.close()
+    return row is not None
+
+
+def get_all_owners():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT user_id FROM staff WHERE role = 'owner'")
+    rows = [row[0] for row in c.fetchall()]
+    c.close()
+    conn.close()
+    return rows
+
+
+def count_staff_by_role(role):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM staff WHERE role = %s", (role,))
+    count = c.fetchone()[0]
+    c.close()
+    conn.close()
+    return count
+
+
+def count_owners():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM staff WHERE role = 'owner'")
+    count = c.fetchone()[0]
+    c.close()
+    conn.close()
+    return count
+
+
+# ============================================
+# آمار واقعی
+# ============================================
+
+def get_users_stats():
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute("SELECT COUNT(*) FROM users")
+    total = c.fetchone()[0]
+
+    now = jdatetime.datetime.now()
+    today_str = now.strftime("%Y/%m/%d")
+    week_ago = (now - jdatetime.timedelta(days=7)).strftime("%Y/%m/%d")
+    month_ago = (now - jdatetime.timedelta(days=30)).strftime("%Y/%m/%d")
+
+    c.execute("SELECT COUNT(*) FROM users WHERE created_at LIKE %s", (f"{today_str}%",))
+    today = c.fetchone()[0]
+
+    c.execute("SELECT COUNT(*) FROM users WHERE created_at >= %s", (week_ago,))
+    week = c.fetchone()[0]
+
+    c.execute("SELECT COUNT(*) FROM users WHERE created_at >= %s", (month_ago,))
+    month = c.fetchone()[0]
+
+    c.close()
+    conn.close()
+
+    return {'total': total, 'today': today, 'week': week, 'month': month}
+
+
+def get_questions_stats():
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute("SELECT COUNT(*) FROM questions")
+    total = c.fetchone()[0]
+
+    now = jdatetime.datetime.now()
+    today_str = now.strftime("%Y/%m/%d")
+    week_ago = (now - jdatetime.timedelta(days=7)).strftime("%Y/%m/%d")
+    month_ago = (now - jdatetime.timedelta(days=30)).strftime("%Y/%m/%d")
+
+    c.execute("SELECT COUNT(*) FROM questions WHERE created_at LIKE %s", (f"{today_str}%",))
+    today = c.fetchone()[0]
+
+    c.execute("SELECT COUNT(*) FROM questions WHERE created_at >= %s", (week_ago,))
+    week = c.fetchone()[0]
+
+    c.execute("SELECT COUNT(*) FROM questions WHERE created_at >= %s", (month_ago,))
+    month = c.fetchone()[0]
+
+    c.execute("SELECT COUNT(*) FROM questions WHERE subject = 'زیست'")
+    bio = c.fetchone()[0]
+
+    c.execute("SELECT COUNT(*) FROM questions WHERE subject = 'شیمی'")
+    chem = c.fetchone()[0]
+
+    c.execute("SELECT COUNT(*) FROM questions WHERE subject = 'فیزیک'")
+    phys = c.fetchone()[0]
+
+    c.execute("SELECT COUNT(*) FROM questions WHERE subject = 'ریاضی'")
+    math = c.fetchone()[0]
+
+    c.execute("SELECT COUNT(*) FROM questions WHERE status IN ('answered', 'closed')")
+    answered = c.fetchone()[0]
+
+    c.execute("SELECT COUNT(*) FROM questions WHERE status = 'waiting'")
+    waiting = c.fetchone()[0]
+
+    c.close()
+    conn.close()
+
+    return {
+        'total': total, 'today': today, 'week': week, 'month': month,
+        'bio': bio, 'chem': chem, 'phys': phys, 'math': math,
+        'answered': answered, 'waiting': waiting,
+    }
+
+
+def get_income_stats():
+    conn = get_connection()
+    c = conn.cursor()
+
+    now = jdatetime.datetime.now()
+    today_str = now.strftime("%Y/%m/%d")
+    week_ago = (now - jdatetime.timedelta(days=7)).strftime("%Y/%m/%d")
+    month_ago = (now - jdatetime.timedelta(days=30)).strftime("%Y/%m/%d")
+
+    c.execute("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE status = 'success' AND created_at LIKE %s", (f"{today_str}%",))
+    today = c.fetchone()[0]
+
+    c.execute("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE status = 'success' AND created_at >= %s", (week_ago,))
+    week = c.fetchone()[0]
+
+    c.execute("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE status = 'success' AND created_at >= %s", (month_ago,))
+    month = c.fetchone()[0]
+
+    c.close()
+    conn.close()
+
+    return {'today': today, 'week': week, 'month': month}
+
+
+def get_teachers_invoice():
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute("SELECT user_id, username, subject FROM staff WHERE role = 'teacher'")
+    teachers = c.fetchall()
+
+    result = []
+    for tid, uname, subj in teachers:
+        c.execute("SELECT COUNT(*) FROM questions WHERE teacher_id = %s AND status IN ('answered', 'closed')", (tid,))
+        total = c.fetchone()[0]
+        result.append({
+            'teacher_id': tid,
+            'username': uname,
+            'subject': subj,
+            'total_questions': total,
+            'start_questions': 0,
+            'normal_questions': total,
+        })
+
+    c.close()
+    conn.close()
+    return result
+
+
+def reset_teacher_invoice():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE questions SET teacher_invoice_counted = 0 WHERE teacher_invoice_counted = 1")
+    conn.commit()
+    c.close()
+    conn.close()
+
+
+def get_user_purchases(user_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT id, amount, type, status, created_at 
+        FROM transactions 
+        WHERE user_id = %s 
+        ORDER BY id DESC 
+        LIMIT 20
+    """, (user_id,))
+    rows = c.fetchall()
+    c.close()
+    conn.close()
+    return rows
+
+
+def get_active_users(days=30):
+    conn = get_connection()
+    c = conn.cursor()
+    now = jdatetime.datetime.now()
+    cutoff = (now - jdatetime.timedelta(days=days)).strftime("%Y/%m/%d")
+    c.execute("""
+        SELECT DISTINCT user_id FROM questions 
+        WHERE created_at >= %s
+    """, (cutoff,))
+    users = [row[0] for row in c.fetchall()]
+    c.close()
+    conn.close()
+    return users
+
+
+def get_package_buyers():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT DISTINCT user_id FROM transactions 
+        WHERE type = 'package' AND status = 'success'
+    """)
+    users = [row[0] for row in c.fetchall()]
+    c.close()
+    conn.close()
+    return users
