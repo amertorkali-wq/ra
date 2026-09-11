@@ -21,6 +21,7 @@ from database import (
     create_payment_record, update_payment_status,
     get_user_open_ticket, get_card,
     get_discount_code, use_discount_code,
+    get_user_referral_stats,
 )
 from zibal import create_payment, verify_payment
 from keyboards import (
@@ -154,23 +155,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         create_user(user_id, user.username, user.first_name, user.last_name, invited_by)
 
     if await is_user_member(context.application, user_id):
-        if is_new:
-            inviter_id = reward_inviter(user_id)
-            if inviter_id:
-                try:
-                    await context.bot.send_message(
-                        chat_id=inviter_id,
-                        text=(
-                            "🎉 *تبریک!* یک نفر با لینک دعوت شما وارد ربات شد.\n\n"
-                            "🎁 *پاداش شما:*\n"
-                            "💰 ۴٬۰۰۰ تومان به کیف پول\n"
-                            "❓ ۳ سوال اضافه"
-                        ),
-                        parse_mode="Markdown"
-                    )
-                except:
-                    pass
-
+        # ⚠️ پاداش اینجا داده نمی‌شه! فقط بعد از احراز هویت کامل
         await update.message.reply_text(
             WELCOME_MSG,
             reply_markup=get_main_menu_keyboard()
@@ -190,21 +175,7 @@ async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE)
     message = query.message
 
     if await is_user_member(context.application, user_id):
-        inviter_id = reward_inviter(user_id)
-        if inviter_id:
-            try:
-                await context.bot.send_message(
-                    chat_id=inviter_id,
-                    text=(
-                        "🎉 *تبریک!* یک نفر با لینک دعوت شما وارد ربات شد.\n\n"
-                        "🎁 *پاداش شما:*\n"
-                        "💰 ۴٬۰۰۰ تومان به کیف پول\n"
-                        "❓ ۳ سوال اضافه"
-                    ),
-                    parse_mode="Markdown"
-                )
-            except:
-                pass
+        # ⚠️ پاداش اینجا داده نمی‌شه!
         try:
             await message.delete()
         except:
@@ -249,7 +220,6 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
         all_cards = get_user_cards(user_id)
 
         if not cards:
-            # بررسی کن که آیا کارت در انتظار تأیید داره یا نه
             pending_cards = [c for c in all_cards if not c[5]]
 
             if pending_cards:
@@ -419,12 +389,10 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
         total_price = pkg['price']
         context.user_data['selected_card_id'] = card_id
 
-        # ساخت invoice_id
         import time
         invoice_id = int(time.time())
         context.user_data['invoice_id'] = invoice_id
 
-        # کسر از کیف پول
         wallet_deduction = min(wallet, total_price)
         remaining = total_price - wallet_deduction
 
@@ -732,7 +700,6 @@ async def handle_auth_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         masked = f"{card[2][:4]} **** **** {card[2][-4:]}"
         delete_card(card_id)
 
-        # بعد از حذف، برگرد به لیست کارت‌ها
         cards = get_user_cards(user_id)
         if cards:
             text = "🧾 *لیست کارت‌های شما:*\n\n"
@@ -841,7 +808,7 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# هندلر عکس (فقط عکس کارت)
+# هندلر عکس
 # ============================================
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -853,15 +820,22 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await support_panel.user_send_ticket_message(update, context, ticket_id)
         return
 
-    # فقط عکس کارت
+    # عکس کارت
     if context.user_data.get('awaiting_card_photo'):
+        card_photo = update.message.photo[-1].file_id
         card_number = context.user_data.get('card_number_temp')
+
         if not card_number:
-            await update.message.reply_text("⚠️ لطفاً دوباره از ابتدا شروع کنید.")
-            clear_user_states(context)
+            context.user_data['card_photo'] = card_photo
+            context.user_data['awaiting_card_number'] = True
+            context.user_data['awaiting_card_photo'] = False
+            await update.message.reply_text(
+                "📷 عکس دریافت شد.\n\n"
+                "✍️ حالا لطفاً *شماره کارت ۱۶ رقمی* خود را وارد کنید.",
+                parse_mode="Markdown"
+            )
             return
 
-        card_photo = update.message.photo[-1].file_id
         card_id = add_card(user_id, card_number, update.effective_user.first_name or "کاربر", card_photo)
 
         context.user_data['awaiting_card_photo'] = False
@@ -873,7 +847,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_menu_keyboard()
         )
 
-        # ارسال به گروه حسابداری
         user_info = get_user_info(user_id)
         try:
             await context.bot.send_photo(
@@ -976,11 +949,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['awaiting_auth_code'] = False
             update_user(user_id, phone_verified=1)
             context.user_data['awaiting_card_number'] = True
+
+            # ⚠️ پاداش به دعوت‌کننده بعد از احراز هویت موفق
+            inviter_id = reward_inviter(user_id)
+            if inviter_id:
+                try:
+                    await context.bot.send_message(
+                        chat_id=inviter_id,
+                        text=(
+                            "🎉 *تبریک!* یک نفر با لینک دعوت شما احراز هویت کرد.\n\n"
+                            "🎁 *پاداش شما:*\n"
+                            "💰 ۴٬۰۰۰ تومان به کیف پول\n"
+                            "❓ ۳ سوال اضافه"
+                        ),
+                        parse_mode="Markdown"
+                    )
+                except:
+                    pass
+
+            # ⚠️ فقط درخواست عکس کارت - بدون متن طولانی
             await update.message.reply_text(
                 "✅ شماره شما با موفقیت تأیید شد!\n\n"
-                "➕ برای افزودن کارت، *شماره کارت* خود را وارد کنید.\n"
-                "فقط کارت‌هایی که به نام شما هستند قابل ثبت‌اند ⚠️",
-                parse_mode="Markdown"
+                "📷 حالا لطفاً *عکس کارت بانکی* خود را ارسال کنید.\n"
+                "⚠️ فقط کارت‌هایی که به نام شما هستند.\n"
+                "⚠️ شماره CVV2 را در عکس بپوشانید.",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardRemove()
             )
         else:
             await update.message.reply_text(
@@ -996,13 +990,47 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get('awaiting_card_number'):
         if text and text.isdigit() and len(text) == 16:
             context.user_data['awaiting_card_number'] = False
-            context.user_data['awaiting_card_photo'] = True
-            context.user_data['card_number_temp'] = text
+            card_photo = context.user_data.get('card_photo')
 
-            await update.message.reply_text(
-                "📷 لطفاً عکس کارت خود را ارسال کنید.\n\n"
-                "⚠️ شماره CVV2 را در عکس بپوشانید."
-            )
+            if card_photo:
+                card_id = add_card(user_id, text, user.first_name or "کاربر", card_photo)
+                context.user_data.pop('card_photo', None)
+
+                await update.message.reply_text(
+                    "✅ کارت شما ثبت شد.\n"
+                    "⏳ کارت در انتظار تأیید قرار دارد.",
+                    reply_markup=get_main_menu_keyboard()
+                )
+
+                user_info = get_user_info(user_id)
+                try:
+                    await context.bot.send_photo(
+                        chat_id=ACCOUNTING_GROUP,
+                        photo=card_photo,
+                        caption=(
+                            f"📌 احراز کارت جدید\n\n"
+                            f"👤 کاربر: @{user.username or 'ندارد'}\n"
+                            f"🆔 آیدی: {user_id}\n"
+                            f"📱 شماره: {user_info.get('phone', 'نامشخص') if user_info else 'نامشخص'}\n"
+                            f"💳 شماره کارت: {text}\n"
+                            f"👤 نام: {user.first_name or ''}"
+                        ),
+                        reply_markup=InlineKeyboardMarkup([
+                            [
+                                InlineKeyboardButton("✅ تأیید کارت", callback_data=f"acc_verify_{card_id}", style="success"),
+                                InlineKeyboardButton("❌ رد کارت", callback_data=f"acc_reject_{card_id}", style="danger"),
+                            ]
+                        ])
+                    )
+                except Exception as e:
+                    print(f"Error sending to accounting: {e}")
+            else:
+                context.user_data['awaiting_card_photo'] = True
+                context.user_data['card_number_temp'] = text
+                await update.message.reply_text(
+                    "📷 لطفاً عکس کارت خود را ارسال کنید.\n\n"
+                    "⚠️ شماره CVV2 را در عکس بپوشانید."
+                )
         else:
             await update.message.reply_text("⚠️ شماره کارت باید ۱۶ رقم عددی باشد.")
         return
@@ -1089,7 +1117,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif text == "🤝 دعوت دوستان":
+        stats = get_user_referral_stats(user_id)
         referral_link = f"{BOT_LINK}{user_id}"
+
         try:
             await update.message.reply_text(
                 INVITE_TEXT_1.format(invite_link=referral_link),
@@ -1097,6 +1127,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await update.message.reply_text(
                 INVITE_TEXT_2,
+                parse_mode="Markdown"
+            )
+            await update.message.reply_text(
+                f"📊 *آمار زیرمجموعه‌های شما:*\n\n"
+                f"✅ کامل (احراز هویت شده): {stats['complete']}\n"
+                f"⏳ ناقص (احراز هویت نشده): {stats['incomplete']}\n"
+                f"💰 پاداش کامل: {stats['complete'] * 4000:,} تومان",
                 reply_markup=get_main_menu_keyboard(),
                 parse_mode="Markdown"
             )

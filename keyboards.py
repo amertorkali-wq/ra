@@ -81,9 +81,11 @@ def get_balance_buttons():
 def get_auth_buttons():
     keyboard = [
         [InlineKeyboardButton("🧾 لیست کارت‌ها", callback_data="card_list", style="primary")],
-        [InlineKeyboardButton("➕ افزودن کارت", callback_data="add_card", style="success")],
-        [InlineKeyboardButton("➖ حذف کارت", callback_data="remove_card", style="danger")],
-        [InlineKeyboardButton("🔙 بازگشت به افزایش موجودی", callback_data="back_to_balance", style="danger")],
+        [
+            InlineKeyboardButton("➕ افزودن کارت", callback_data="add_card", style="success"),
+            InlineKeyboardButton("➖ حذف کارت", callback_data="remove_card", style="danger"),
+        ],
+        [InlineKeyboardButton("🏠 منوی اصلی", callback_data="back_to_main", style="primary")],
     ]
     return InlineKeyboardMarkup(keyboard)
 
