@@ -34,13 +34,17 @@ def init_db():
     conn = get_connection()
     c = conn.cursor()
 
-    # ⚠️ Migration - اضافه کردن ستون‌های جدید به جدول‌های موجود
+    # ⚠️ Migration
     try:
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_status TEXT DEFAULT 'pending'")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_completed_at TEXT DEFAULT NULL")
         c.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS package_id INTEGER DEFAULT NULL")
         c.execute("ALTER TABLE staff ADD COLUMN IF NOT EXISTS display_name TEXT DEFAULT NULL")
         c.execute("ALTER TABLE staff ADD COLUMN IF NOT EXISTS subject TEXT DEFAULT NULL")
+        c.execute("ALTER TABLE discount_codes ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'percent'")
+        c.execute("ALTER TABLE discount_codes ADD COLUMN IF NOT EXISTS discount_value BIGINT DEFAULT 0")
+        c.execute("ALTER TABLE discount_codes ADD COLUMN IF NOT EXISTS expires_at TEXT DEFAULT NULL")
+        c.execute("ALTER TABLE discount_codes ADD COLUMN IF NOT EXISTS created_by BIGINT DEFAULT NULL")
         conn.commit()
         print("✅ Migration انجام شد")
     except Exception as e:
@@ -208,11 +212,13 @@ def init_db():
         CREATE TABLE IF NOT EXISTS discount_codes (
             id SERIAL PRIMARY KEY,
             code TEXT UNIQUE,
-            percent INTEGER DEFAULT 0,
-            amount BIGINT DEFAULT 0,
+            discount_type TEXT DEFAULT 'percent',
+            discount_value BIGINT DEFAULT 0,
             max_uses INTEGER DEFAULT 0,
             used_count INTEGER DEFAULT 0,
+            expires_at TEXT DEFAULT NULL,
             active INTEGER DEFAULT 1,
+            created_by BIGINT DEFAULT NULL,
             created_at TEXT
         )
     ''')
@@ -289,7 +295,6 @@ def update_user(user_id, **kwargs):
 
 
 def reward_inviter(invited_user_id):
-    """پاداش فقط زمانی که کاربر احراز هویت کامل کنه"""
     conn = get_connection()
     c = conn.cursor()
 
@@ -336,7 +341,6 @@ def reward_inviter(invited_user_id):
 
 
 def get_user_referral_stats(user_id):
-    """آمار زیرمجموعه‌های کاربر (کامل/ناقص)"""
     conn = get_connection()
     c = conn.cursor()
 
@@ -985,6 +989,150 @@ def is_payment_verified(authority):
 
 
 # ============================================
+# کد تخفیف
+# ============================================
+
+def create_discount_code_full(code, discount_type, discount_value, max_uses=0, expires_minutes=0, created_by=None):
+    conn = get_connection()
+    c = conn.cursor()
+    now = get_shamsi_now()
+    
+    expires_at = None
+    if expires_minutes > 0:
+        expires_at = (jdatetime.datetime.now() + jdatetime.timedelta(minutes=expires_minutes)).strftime("%Y/%m/%d %H:%M:%S")
+    
+    try:
+        c.execute('''
+            INSERT INTO discount_codes 
+            (code, discount_type, discount_value, max_uses, expires_at, created_by, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ''', (code, discount_type, discount_value, max_uses, expires_at, created_by, now))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error create_discount_code_full: {e}")
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+
+def get_discount_code_full(code):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM discount_codes WHERE code = %s AND active = 1", (code,))
+    row = c.fetchone()
+    c.close()
+    conn.close()
+    
+    if not row:
+        return None
+    
+    return {
+        'id': row[0],
+        'code': row[1],
+        'discount_type': row[2] if len(row) > 2 else 'percent',
+        'discount_value': row[3] if len(row) > 3 else 0,
+        'max_uses': row[4] if len(row) > 4 else 0,
+        'used_count': row[5] if len(row) > 5 else 0,
+        'expires_at': row[6] if len(row) > 6 else None,
+        'active': row[7] if len(row) > 7 else 1,
+        'created_at': row[8] if len(row) > 8 else None,
+    }
+
+
+def is_discount_code_valid(code, user_id):
+    code_data = get_discount_code_full(code)
+    if not code_data:
+        return {'valid': False, 'reason': 'کد تخفیف یافت نشد.'}
+    
+    if code_data['max_uses'] > 0 and code_data['used_count'] >= code_data['max_uses']:
+        return {'valid': False, 'reason': 'این کد تخفیف به حداکثر تعداد استفاده رسیده است.'}
+    
+    if code_data['expires_at']:
+        now = get_shamsi_now()
+        if now > code_data['expires_at']:
+            return {'valid': False, 'reason': 'این کد تخفیف منقضی شده است.'}
+    
+    # چک استفاده قبلی توسط همین کاربر
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute('''
+        SELECT id FROM transactions 
+        WHERE user_id = %s AND transaction_id = %s AND status = 'success'
+        LIMIT 1
+    ''', (user_id, f"discount_{code}"))
+    used = c.fetchone()
+    c.close()
+    conn.close()
+    
+    if used:
+        return {'valid': False, 'reason': 'شما قبلاً از این کد استفاده کرده‌اید.'}
+    
+    return {'valid': True, 'data': code_data}
+
+
+def apply_discount_to_amount(amount, code):
+    code_data = get_discount_code_full(code)
+    if not code_data:
+        return amount
+    
+    if code_data['discount_type'] == 'percent':
+        discount = int(amount * code_data['discount_value'] / 100)
+        new_amount = max(0, amount - discount)
+    else:
+        new_amount = max(0, amount - code_data['discount_value'])
+    
+    return new_amount
+
+
+def mark_discount_used(code, user_id):
+    conn = get_connection()
+    c = conn.cursor()
+    
+    c.execute("UPDATE discount_codes SET used_count = used_count + 1 WHERE code = %s", (code,))
+    
+    now = get_shamsi_now()
+    c.execute('''
+        INSERT INTO transactions (user_id, amount, card_number, transaction_id, status, type, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    ''', (user_id, 0, '-', f"discount_{code}", 'success', 'discount_use', now))
+    
+    conn.commit()
+    c.close()
+    conn.close()
+
+
+def get_all_discount_codes():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT id, code, discount_type, discount_value, max_uses, used_count, expires_at, active FROM discount_codes ORDER BY id DESC")
+    rows = c.fetchall()
+    c.close()
+    conn.close()
+    return rows
+
+
+def delete_discount_code(code_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM discount_codes WHERE id = %s", (code_id,))
+    conn.commit()
+    c.close()
+    conn.close()
+
+
+def get_discount_code_by_id(code_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM discount_codes WHERE id = %s", (code_id,))
+    row = c.fetchone()
+    c.close()
+    conn.close()
+    return row
+
+
+# ============================================
 # آمار
 # ============================================
 
@@ -1034,10 +1182,6 @@ def get_stats():
         'income': income,
     }
 
-
-# ============================================
-# آمار واقعی بر اساس تاریخ
-# ============================================
 
 def get_users_stats():
     conn = get_connection()
@@ -1283,44 +1427,3 @@ def get_total_phones_count():
     c.close()
     conn.close()
     return count
-
-
-# ============================================
-# کد تخفیف
-# ============================================
-
-def create_discount_code(code, percent=0, amount=0, max_uses=0):
-    conn = get_connection()
-    c = conn.cursor()
-    now = get_shamsi_now()
-    try:
-        c.execute('''
-            INSERT INTO discount_codes (code, percent, amount, max_uses, created_at)
-            VALUES (%s, %s, %s, %s, %s)
-        ''', (code, percent, amount, max_uses, now))
-        conn.commit()
-        return True
-    except:
-        return False
-    finally:
-        c.close()
-        conn.close()
-
-
-def get_discount_code(code):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT * FROM discount_codes WHERE code = %s AND active = 1", (code,))
-    row = c.fetchone()
-    c.close()
-    conn.close()
-    return row
-
-
-def use_discount_code(code):
-    conn = get_connection()
-    c = conn.cursor()
-    c.execute("UPDATE discount_codes SET used_count = used_count + 1 WHERE code = %s", (code,))
-    conn.commit()
-    c.close()
-    conn.close()

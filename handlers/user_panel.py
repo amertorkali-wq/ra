@@ -20,9 +20,9 @@ from database import (
     reward_inviter, get_shamsi_now, get_shamsi_future_date,
     set_verification_code, get_verification_code,
     create_payment_record, update_payment_status,
-    get_payment_by_authority_full,
+    get_payment_by_authority_full, get_connection,
     get_user_open_ticket, get_card,
-    get_discount_code, use_discount_code,
+    is_discount_code_valid, apply_discount_to_amount, mark_discount_used,
     get_user_referral_stats,
 )
 from zibal import create_payment, verify_payment
@@ -128,6 +128,7 @@ def clear_user_states(context):
         'selected_card_id', 'payment_authority', 'payment_amount',
         'remaining_amount', 'question_purchase', 'question_purchase_amount',
         'invoice_id', 'card_number_temp', 'payment_url',
+        'discount_authority',
     ]
     for state in states:
         context.user_data.pop(state, None)
@@ -444,12 +445,16 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
             f"💰 مبلغ قابل پرداخت: *{pkg['price']:,} تومان*\n"
             f"━━━━━━━━━━━━━━━━━━\n\n"
             f"💳 برای پرداخت، روی دکمه زیر بزنید و اطلاعات کارت خود را در *درگاه امن زیبال* وارد کنید.\n\n"
+            f"🎁 اگر کد تخفیف دارید، روی دکمه «کد تخفیف» بزنید.\n\n"
             f"⚠️ پس از پرداخت، روی دکمه «✅ پرداخت کردم» بزنید."
         )
 
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("💳 پرداخت آنلاین", url=payment_url, style="success")],
-            [InlineKeyboardButton("✅ پرداخت کردم", callback_data=f"verify_pay_{authority}", style="primary")],
+            [
+                InlineKeyboardButton("✅ پرداخت کردم", callback_data=f"verify_pay_{authority}", style="primary"),
+                InlineKeyboardButton("🎁 کد تخفیف", callback_data=f"discount_{authority}", style="primary"),
+            ],
             [InlineKeyboardButton("❌ لغو", callback_data="back_to_balance", style="danger")],
         ])
 
@@ -465,7 +470,6 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
 
     # ---- کاربر می‌گه پرداخت کردم → verify ----
     elif data.startswith("verify_pay_"):
-        # ⚠️ اگه درگاه غیرفعال باشه
         if not ZIBAL_ENABLED:
             await query.answer(
                 "⚠️ درگاه پرداخت موقتاً غیرفعال است.",
@@ -623,13 +627,22 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
 
     # ---- کد تخفیف ----
     elif data.startswith("discount_"):
-        invoice_id = int(data.split("_")[1])
+        authority = data.split("_", 1)[1]
         context.user_data['awaiting_discount_code'] = True
-        context.user_data['discount_invoice_id'] = invoice_id
+        context.user_data['discount_authority'] = authority
 
-        await query.message.reply_text(
-            "🎁 لطفاً کد تخفیف خود را وارد کنید:"
-        )
+        try:
+            await query.edit_message_text(
+                "🎟 *کد تخفیف*\n\n"
+                "لطفاً کد تخفیف خود را وارد کنید:\n\n"
+                "⚠️ توجه: کد تخفیف فقط یک بار قابل استفاده است و روی همین خرید اعمال می‌شود.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("❌ انصراف", callback_data="back_to_balance", style="danger")]
+                ]),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
 
 
 # ============================================
@@ -1085,22 +1098,62 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ---- کد تخفیف ----
     if context.user_data.get('awaiting_discount_code'):
         context.user_data['awaiting_discount_code'] = False
-        discount_code = text.strip()
+        discount_code = text.strip().upper()
+        authority = context.user_data.get('discount_authority')
 
-        code_data = get_discount_code(discount_code)
-        if not code_data:
+        validity = is_discount_code_valid(discount_code, user_id)
+
+        if not validity['valid']:
             await update.message.reply_text(
-                "⚠️ کد تخفیف نامعتبر است.",
+                f"❌ *کد تخفیف نامعتبر*\n\n"
+                f"دلیل: {validity['reason']}\n\n"
+                f"لطفاً کد دیگری وارد کنید یا خرید را ادامه دهید.",
+                reply_markup=get_main_menu_keyboard(),
+                parse_mode="Markdown"
+            )
+            return
+
+        code_data = validity['data']
+
+        payment = get_payment_by_authority_full(authority)
+        if not payment:
+            await update.message.reply_text(
+                "⚠️ تراکنش یافت نشد.",
                 reply_markup=get_main_menu_keyboard()
             )
             return
 
-        use_discount_code(discount_code)
+        old_amount = payment['amount']
+        new_amount = apply_discount_to_amount(old_amount, discount_code)
+        discount_amount = old_amount - new_amount
+
+        type_str = f"{code_data['discount_value']}%" if code_data['discount_type'] == 'percent' else f"{code_data['discount_value']:,} تومان"
+
+        # علامت زدن کد به عنوان استفاده‌شده
+        mark_discount_used(discount_code, user_id)
+
+        # آپدیت مبلغ پرداخت در دیتابیس
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute("UPDATE payments SET amount = %s WHERE authority = %s", (new_amount, str(authority)))
+        conn.commit()
+        c.close()
+        conn.close()
+
         await update.message.reply_text(
-            f"✅ کد تخفیف {discount_code} اعمال شد.\n\n"
-            f"📊 درصد: {code_data[2]}%\n"
-            f"💰 مبلغ: {code_data[3]:,} تومان"
+            f"✅ *کد تخفیف اعمال شد!*\n\n"
+            f"🎟 کد: `{discount_code}`\n"
+            f"💰 نوع تخفیف: {type_str}\n"
+            f"💵 مبلغ اصلی: {old_amount:,} تومان\n"
+            f"🎁 تخفیف: {discount_amount:,} تومان\n"
+            f"✅ مبلغ نهایی: *{new_amount:,} تومان*\n\n"
+            f"👇 حالا می‌توانید پرداخت را ادامه دهید.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🏠 منوی اصلی", callback_data="back_to_main", style="primary")],
+            ]),
+            parse_mode="Markdown"
         )
+
         return
 
     # ---- تعداد سوال ----

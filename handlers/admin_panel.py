@@ -1,8 +1,12 @@
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
-    ReplyKeyboardRemove
+    ReplyKeyboardRemove, InputFile
 )
 from telegram.ext import ContextTypes
+import csv
+from io import StringIO
+import random
+import string
 
 from config import (
     OWNER_ID, DEFAULT_PACKAGES, SUBJECTS,
@@ -18,7 +22,14 @@ from database import (
     get_user_purchases, get_active_users, get_package_buyers,
     get_staff_with_display_name, update_staff,
     export_phone_list, get_total_phones_count,
-    create_discount_code, get_discount_code, use_discount_code,
+    create_discount_code_full,
+    get_discount_code_full,
+    is_discount_code_valid,
+    apply_discount_to_amount,
+    mark_discount_used,
+    get_all_discount_codes,
+    delete_discount_code,
+    get_discount_code_by_id,
 )
 from keyboards import (
     get_admin_main_keyboard,
@@ -42,6 +53,9 @@ from keyboards import (
     get_admin_phones_keyboard,
     get_confirm_cancel_buttons,
     get_admin_package_select_keyboard,
+    get_admin_discount_keyboard,
+    get_admin_discount_type_keyboard,
+    get_admin_discount_list_buttons,
     get_main_menu_keyboard,
 )
 
@@ -107,7 +121,6 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         except:
             pass
 
-    # ---- بازگشت به ربات ----
     elif data == "adm_back_to_bot":
         try:
             await query.message.delete()
@@ -156,25 +169,24 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         context.user_data['adm_state'] = 'awaiting_purchases_user_id'
 
-    # ---- دکمه‌های عملیات روی کاربر ----
+    # ---- دکمه‌های عملیات کاربر ----
     elif data.startswith("adm_user_toggle_block_"):
         uid = int(data.replace("adm_user_toggle_block_", ""))
         user_data = get_user(uid)
         if not user_data:
             await query.answer("⚠️ کاربر یافت نشد.", show_alert=True)
             return
-        
+
         new_status = 0 if user_data[16] else 1
         update_user(uid, is_blocked=new_status)
         status_text = "مسدود شد ✅" if new_status else "رفع مسدودیت شد ✅"
-        
+
         await query.answer(f"✅ کاربر {uid} {status_text}", show_alert=True)
-        
-        # بروزرسانی پیام
+
         fresh = get_user(uid)
         is_blocked = bool(fresh[16])
         block_status = "🔴 مسدود" if is_blocked else "🟢 فعال"
-        
+
         text_info = (
             f"👤 *اطلاعات کاربر* `{uid}`\n\n"
             f"📛 نام: {fresh[2] or ''} {fresh[3] or ''}\n"
@@ -191,7 +203,7 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             f"👥 زیرمجموعه: {fresh[12]}\n"
             f"🛡 وضعیت: {block_status}"
         )
-        
+
         try:
             await query.edit_message_text(
                 text_info,
@@ -236,33 +248,32 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         )
 
     elif data.startswith("adm_activate_pkg_"):
-        # فرمت: adm_activate_pkg_{user_id}_{pkg_id}
         parts = data.replace("adm_activate_pkg_", "").split("_")
         uid = int(parts[0])
         pkg_id = int(parts[1])
-        
+
         pkg = next((p for p in DEFAULT_PACKAGES if p['id'] == pkg_id), None)
         if not pkg:
             await query.answer("⚠️ پکیج یافت نشد.", show_alert=True)
             return
-        
+
         user_data = get_user(uid)
         if not user_data:
             await query.answer("⚠️ کاربر یافت نشد.", show_alert=True)
             return
-        
+
         new_questions = (user_data[8] or 0) + pkg['questions']
         expire_date = get_shamsi_future_date(pkg['days'])
-        
+
         update_user(
             uid,
             questions_remaining=new_questions,
             active_package=pkg['name'],
             package_expire_date=expire_date
         )
-        
+
         await query.answer(f"✅ پکیج {pkg['name']} فعال شد.", show_alert=True)
-        
+
         try:
             await context.bot.send_message(
                 chat_id=uid,
@@ -277,12 +288,11 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             )
         except:
             pass
-        
-        # بروزرسانی پیام
+
         fresh = get_user(uid)
         is_blocked = bool(fresh[16])
         block_status = "🔴 مسدود" if is_blocked else "🟢 فعال"
-        
+
         text_info = (
             f"👤 *اطلاعات کاربر* `{uid}`\n\n"
             f"📛 نام: {fresh[2] or ''} {fresh[3] or ''}\n"
@@ -299,7 +309,7 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             f"👥 زیرمجموعه: {fresh[12]}\n"
             f"🛡 وضعیت: {block_status}"
         )
-        
+
         try:
             await query.edit_message_text(
                 text_info,
@@ -818,10 +828,6 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.answer(f"📊 تعداد شماره‌ها: {count}", show_alert=True)
 
     elif data == "adm_phones_csv":
-        from database import export_phone_list
-        import csv
-        from io import StringIO
-
         try:
             rows = export_phone_list()
             if not rows:
@@ -836,7 +842,6 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
                 writer.writerow(row)
 
             output.seek(0)
-            from telegram import InputFile
             file = InputFile(output, filename="violex_phones.csv")
 
             await context.bot.send_document(
@@ -848,6 +853,118 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         except Exception as e:
             print(f"CSV Export error: {e}")
             await query.answer("❌ خطا در ساخت فایل.", show_alert=True)
+
+    # ---- کد تخفیف ----
+    elif data == "adm_section_discount":
+        if not is_admin(user_id):
+            await query.answer("⛔ دسترسی ندارید.", show_alert=True)
+            return
+        try:
+            await query.edit_message_text(
+                "🎟 *مدیریت کدهای تخفیف*\n\n"
+                "از گزینه‌های زیر انتخاب کنید:",
+                reply_markup=get_admin_discount_keyboard(),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+
+    elif data == "adm_discount_create":
+        await query.edit_message_text(
+            "🎟 *ایجاد کد تخفیف*\n\n"
+            "لطفاً نوع تخفیف را انتخاب کنید:",
+            reply_markup=get_admin_discount_type_keyboard(),
+            parse_mode="Markdown"
+        )
+
+    elif data == "adm_disc_type_percent":
+        context.user_data['disc_type'] = 'percent'
+        await query.edit_message_text(
+            "📊 *تخفیف درصدی*\n\n"
+            "لطفاً درصد تخفیف را وارد کنید:\n"
+            "مثال: `20` (یعنی 20% تخفیف)",
+            reply_markup=get_admin_back_button(),
+            parse_mode="Markdown"
+        )
+        context.user_data['adm_state'] = 'awaiting_discount_value'
+
+    elif data == "adm_disc_type_amount":
+        context.user_data['disc_type'] = 'amount'
+        await query.edit_message_text(
+            "💰 *تخفیف مبلغی*\n\n"
+            "لطفاً مبلغ تخفیف را به تومان وارد کنید:\n"
+            "مثال: `50000` (یعنی 50,000 تومان تخفیف)",
+            reply_markup=get_admin_back_button(),
+            parse_mode="Markdown"
+        )
+        context.user_data['adm_state'] = 'awaiting_discount_value'
+
+    elif data == "adm_discount_list":
+        codes = get_all_discount_codes()
+        if not codes:
+            text = "📋 هیچ کد تخفیفی وجود ندارد."
+        else:
+            text = "📋 *لیست کدهای تخفیف:*\n\n"
+            for code in codes:
+                code_id, code_text, d_type, d_value, max_uses, used, expires, active = code
+
+                type_str = f"{d_value}%" if d_type == 'percent' else f"{d_value:,} تومان"
+                uses_str = f"{used}/{max_uses}" if max_uses > 0 else f"{used}/∞"
+                status_str = "🟢 فعال" if active else "🔴 غیرفعال"
+                expire_str = expires if expires else "∞"
+
+                text += (
+                    f"🎟 *{code_text}*\n"
+                    f"💰 نوع: {type_str}\n"
+                    f"📊 استفاده: {uses_str}\n"
+                    f"⏰ انقضا: {expire_str}\n"
+                    f"🛡 وضعیت: {status_str}\n"
+                    f"🆔 ID: `{code_id}`\n"
+                    f"━━━━━━━━━━━━━━━━━━\n"
+                )
+        try:
+            await query.edit_message_text(text, reply_markup=get_admin_discount_keyboard(), parse_mode="Markdown")
+        except:
+            pass
+
+    elif data == "adm_discount_delete":
+        codes = get_all_discount_codes()
+        if not codes:
+            await query.answer("⚠️ هیچ کد تخفیفی وجود ندارد.", show_alert=True)
+            return
+        try:
+            await query.edit_message_text(
+                "🗑 *حذف کد تخفیف*\n\n"
+                "کد مورد نظر برای حذف را انتخاب کنید:",
+                reply_markup=get_admin_discount_list_buttons(codes),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+
+    elif data.startswith("adm_disc_del_"):
+        code_id = int(data.replace("adm_disc_del_", ""))
+        code_data = get_discount_code_by_id(code_id)
+        if code_data:
+            delete_discount_code(code_id)
+            await query.answer(f"✅ کد {code_data[1]} حذف شد.", show_alert=True)
+        else:
+            await query.answer("⚠️ کد یافت نشد.", show_alert=True)
+
+        codes = get_all_discount_codes()
+        if not codes:
+            try:
+                await query.edit_message_text("📋 هیچ کد تخفیفی وجود ندارد.", reply_markup=get_admin_discount_keyboard())
+            except:
+                pass
+        else:
+            try:
+                await query.edit_message_text(
+                    "🗑 کد مورد نظر برای حذف را انتخاب کنید:",
+                    reply_markup=get_admin_discount_list_buttons(codes)
+                )
+            except:
+                pass
 
     else:
         await query.answer("⚠️ این دکمه فعال نیست.", show_alert=False)
@@ -870,7 +987,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not text:
         return False
 
-    # ---- عملیات روی کاربر (افزایش موجودی/سوال) ----
+    # ---- عملیات روی کاربر ----
     if state == 'awaiting_user_action_value':
         uid = context.user_data.get('adm_action_user_id')
         action_type = context.user_data.get('adm_action_type')
@@ -932,6 +1049,115 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context.user_data.pop('adm_action_user_id', None)
         context.user_data.pop('adm_action_type', None)
 
+    # ---- کد تخفیف ----
+    elif state == 'awaiting_discount_value':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ لطفاً یک عدد معتبر وارد کنید.")
+            return True
+
+        value = int(text)
+        disc_type = context.user_data.get('disc_type')
+
+        if disc_type == 'percent' and (value < 1 or value > 100):
+            await update.message.reply_text("⚠️ درصد باید بین 1 تا 100 باشد.")
+            return True
+
+        context.user_data['disc_value'] = value
+        await update.message.reply_text(
+            "📊 *حداکثر تعداد استفاده*\n\n"
+            "چند نفر بتوانند از این کد استفاده کنند؟\n"
+            "برای نامحدود `0` وارد کنید.",
+            parse_mode="Markdown"
+        )
+        context.user_data['adm_state'] = 'awaiting_discount_max_uses'
+
+    elif state == 'awaiting_discount_max_uses':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ لطفاً یک عدد معتبر وارد کنید.")
+            return True
+
+        max_uses = int(text)
+        context.user_data['disc_max_uses'] = max_uses
+
+        await update.message.reply_text(
+            "⏰ *مدت اعتبار*\n\n"
+            "چند دقیقه این کد معتبر باشد؟\n"
+            "برای نامحدود `0` وارد کنید.\n\n"
+            "مثال: `30` (نیم ساعت) یا `1440` (یک روز)",
+            parse_mode="Markdown"
+        )
+        context.user_data['adm_state'] = 'awaiting_discount_expires'
+
+    elif state == 'awaiting_discount_expires':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ لطفاً یک عدد معتبر وارد کنید.")
+            return True
+
+        expires_minutes = int(text)
+        context.user_data['disc_expires'] = expires_minutes
+
+        auto_code = 'VIOLEX' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
+        await update.message.reply_text(
+            f"🎟 *کد تخفیف*\n\n"
+            f"لطفاً کد دلخواه خود را وارد کنید:\n"
+            f"(فقط حروف انگلیسی و اعداد، بدون فاصله)\n\n"
+            f"مثال: `{auto_code}`\n\n"
+            f"یا برای استفاده از همین کد پیشنهادی، کلمه `auto` را ارسال کنید.",
+            parse_mode="Markdown"
+        )
+        context.user_data['auto_code'] = auto_code
+        context.user_data['adm_state'] = 'awaiting_discount_code'
+
+    elif state == 'awaiting_discount_code':
+        code_input = text.strip().upper()
+
+        if code_input.lower() == 'AUTO':
+            code_input = context.user_data.get('auto_code')
+
+        existing = get_discount_code_full(code_input)
+        if existing:
+            await update.message.reply_text(
+                "⚠️ این کد قبلاً ثبت شده است.\n"
+                "لطفاً کد دیگری وارد کنید:"
+            )
+            return True
+
+        disc_type = context.user_data.get('disc_type')
+        disc_value = context.user_data.get('disc_value')
+        max_uses = context.user_data.get('disc_max_uses')
+        expires_minutes = context.user_data.get('disc_expires')
+
+        success = create_discount_code_full(
+            code=code_input,
+            discount_type=disc_type,
+            discount_value=disc_value,
+            max_uses=max_uses,
+            expires_minutes=expires_minutes,
+            created_by=user_id
+        )
+
+        if success:
+            type_str = f"{disc_value}%" if disc_type == 'percent' else f"{disc_value:,} تومان"
+            uses_str = f"{max_uses} نفر" if max_uses > 0 else "نامحدود"
+            expire_str = f"{expires_minutes} دقیقه" if expires_minutes > 0 else "نامحدود"
+
+            await update.message.reply_text(
+                f"✅ *کد تخفیف با موفقیت ایجاد شد!*\n\n"
+                f"🎟 کد: `{code_input}`\n"
+                f"💰 نوع: {type_str}\n"
+                f"📊 حداکثر استفاده: {uses_str}\n"
+                f"⏰ اعتبار: {expire_str}\n\n"
+                f"این کد را برای کاربران بفرستید.",
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text("❌ خطا در ایجاد کد تخفیف.")
+
+        for key in ['disc_type', 'disc_value', 'disc_max_uses', 'disc_expires', 'auto_code']:
+            context.user_data.pop(key, None)
+        context.user_data.pop('adm_state', None)
+
     # ---- جستجوی کاربر ----
     elif state == 'awaiting_search_user_id':
         if not text.isdigit():
@@ -985,7 +1211,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await update.message.reply_text(f"✅ کاربر {uid} {status_text}")
         context.user_data.pop('adm_state', None)
 
-    # ---- ارسال هدیه (پول) ----
+    # ---- ارسال هدیه پول ----
     elif state == 'awaiting_gift_user_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -1151,7 +1377,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context.user_data.pop('adm_state', None)
         context.user_data.pop('gift_question_user_id', None)
 
-    # ---- افزودن دبیر: مرحله ۱ - آیدی ----
+    # ---- افزودن دبیر ----
     elif state == 'awaiting_teacher_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -1192,7 +1418,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ دبیر {tid} حذف شد.")
         context.user_data.pop('adm_state', None)
 
-    # ---- اتصال دبیر به درس ----
+    # ---- اتصال دبیر ----
     elif state == 'awaiting_connect_teacher_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")

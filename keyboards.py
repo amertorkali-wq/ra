@@ -207,11 +207,11 @@ def get_cards_for_payment(cards):
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_invoice_buttons(invoice_id):
+def get_invoice_buttons(authority):
     keyboard = [
         [
-            InlineKeyboardButton("✅ پرداخت کردم", callback_data=f"paid_check_{invoice_id}", style="success"),
-            InlineKeyboardButton("🎁 کد تخفیف", callback_data=f"discount_{invoice_id}", style="primary"),
+            InlineKeyboardButton("✅ پرداخت کردم", callback_data=f"verify_pay_{authority}", style="success"),
+            InlineKeyboardButton("🎁 کد تخفیف", callback_data=f"discount_{authority}", style="primary"),
         ],
         [
             InlineKeyboardButton("❌ لغو", callback_data="back_to_balance", style="danger"),
@@ -334,11 +334,14 @@ def get_admin_main_keyboard():
             InlineKeyboardButton("📢 پیام همگانی", callback_data="adm_section_broadcast", style="primary"),
         ],
         [
+            InlineKeyboardButton("🎟 کد تخفیف", callback_data="adm_section_discount", style="success"),
             InlineKeyboardButton("🛡 دسترسی", callback_data="adm_section_access", style="primary"),
-            InlineKeyboardButton("⚙️ تنظیمات", callback_data="adm_section_settings", style="primary"),
         ],
         [
+            InlineKeyboardButton("⚙️ تنظیمات", callback_data="adm_section_settings", style="primary"),
             InlineKeyboardButton("📞 لیست شماره‌ها", callback_data="adm_section_phones", style="success"),
+        ],
+        [
             InlineKeyboardButton("🔴 وضعیت ربات", callback_data="adm_section_toggle", style="danger"),
         ],
         [
@@ -369,7 +372,6 @@ def get_admin_users_keyboard():
 
 
 def get_admin_user_actions_keyboard(user_id, is_blocked=False):
-    """دکمه‌های عملیات روی کاربر (شیشه‌ای زیر اطلاعات کاربر)"""
     block_text = "✅ رفع مسدودیت" if is_blocked else "🚫 مسدود سازی"
     keyboard = [
         [InlineKeyboardButton(block_text, callback_data=f"adm_user_toggle_block_{user_id}", style="danger")],
@@ -575,7 +577,6 @@ def get_confirm_cancel_buttons(action, id_):
 
 
 def get_admin_package_select_keyboard(user_id):
-    """انتخاب پکیج برای فعال‌سازی توسط ادمین"""
     keyboard = []
     for pkg in DEFAULT_PACKAGES:
         if pkg['is_start']:
@@ -586,4 +587,43 @@ def get_admin_package_select_keyboard(user_id):
             style="primary"
         )])
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="adm_section_users", style="danger")])
+    return InlineKeyboardMarkup(keyboard)
+
+
+# ============================================
+# کد تخفیف (پنل مدیریت)
+# ============================================
+
+def get_admin_discount_keyboard():
+    keyboard = [
+        [InlineKeyboardButton("➕ ایجاد کد تخفیف", callback_data="adm_discount_create", style="success")],
+        [InlineKeyboardButton("📋 لیست کدهای تخفیف", callback_data="adm_discount_list", style="primary")],
+        [InlineKeyboardButton("🗑 حذف کد تخفیف", callback_data="adm_discount_delete", style="danger")],
+        [InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_back", style="danger")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_admin_discount_type_keyboard():
+    keyboard = [
+        [InlineKeyboardButton("📊 تخفیف درصدی", callback_data="adm_disc_type_percent", style="primary")],
+        [InlineKeyboardButton("💰 تخفیف مبلغی", callback_data="adm_disc_type_amount", style="primary")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="adm_section_discount", style="danger")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_admin_discount_list_buttons(codes):
+    keyboard = []
+    for code in codes:
+        code_id = code[0]
+        code_text = code[1]
+        keyboard.append([
+            InlineKeyboardButton(
+                f"🗑 حذف {code_text}",
+                callback_data=f"adm_disc_del_{code_id}",
+                style="danger"
+            )
+        ])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="adm_section_discount", style="danger")])
     return InlineKeyboardMarkup(keyboard)
