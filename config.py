@@ -44,10 +44,11 @@ SMSIR_API_KEY = "B33h8avj7PGBquAGfOXPLOw7LKYnmJNBXIN9XuxJLrfK0ojd"
 SMSIR_TEMPLATE_ID = 851804
 SMSIR_LINE_NUMBER = "30004505000017"
 
-# ---------- زیبال (واقعی) ----------
+# ---------- زیبال (غیرفعال موقت) ----------
 ZIBAL_MERCHANT = os.environ.get("ZIBAL_MERCHANT", "69e3945ee6d570ad00fd0dad")
 ZIBAL_SANDBOX = False
-# ⚠️ این آدرس باید دامنه واقعی Railway باشه (بدون / در انتها)
+ZIBAL_ENABLED = False   # ⚠️ درگاه غیرفعال - بعد از رفع IP به True تغییر بده
+
 RAILWAY_PUBLIC_DOMAIN = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "your-app.up.railway.app")
 ZIBAL_CALLBACK_URL = f"https://{RAILWAY_PUBLIC_DOMAIN}/zibal/callback"
 

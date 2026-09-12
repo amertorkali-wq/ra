@@ -5,11 +5,11 @@
 import asyncio
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs, urlencode
+from urllib.parse import urlparse, parse_qs
 import json
 import html
 
-from config import WEB_PORT, RAILWAY_PUBLIC_DOMAIN
+from config import WEB_PORT, RAILWAY_PUBLIC_DOMAIN, DEFAULT_PACKAGES, TRANSACTION_CHANNEL
 from database import (
     get_payment_by_authority_full,
     update_payment_status,
@@ -20,7 +20,6 @@ from database import (
     get_shamsi_future_date,
 )
 from zibal import verify_payment
-from config import DEFAULT_PACKAGES, TRANSACTION_CHANNEL
 
 
 # برای دسترسی به bot instance از اینجا
@@ -194,12 +193,8 @@ class CallbackHandler(BaseHTTPRequestHandler):
                             if loop and loop.is_running():
                                 asyncio.run_coroutine_threadsafe(
                                     send_success_message(
-                                        user_id,
-                                        pkg,
-                                        ref_id,
-                                        card_pan,
-                                        new_questions,
-                                        expire_date,
+                                        user_id, pkg, ref_id, card_pan,
+                                        new_questions, expire_date,
                                     ),
                                     loop,
                                 )
@@ -213,11 +208,7 @@ class CallbackHandler(BaseHTTPRequestHandler):
                             if loop and loop.is_running():
                                 asyncio.run_coroutine_threadsafe(
                                     send_channel_report(
-                                        user_id,
-                                        pkg,
-                                        ref_id,
-                                        card_pan,
-                                        payment['amount'],
+                                        user_id, pkg, ref_id, card_pan, payment['amount'],
                                     ),
                                     loop,
                                 )

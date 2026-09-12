@@ -3,6 +3,7 @@ from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
     MessageHandler, filters, ContextTypes
 )
+from telegram.error import Conflict
 
 from config import TOKEN, TEACHER_TIMEOUT_MINUTES, SUPPORT_TIMEOUT_HOURS
 from database import init_db
@@ -10,7 +11,9 @@ from keyboards import get_main_menu_keyboard
 
 from handlers import user_panel, teacher_panel, support_panel
 from handlers import accountant_panel, admin_panel
-from payment_server import start_payment_server, set_bot_instance
+
+# ⚠️ درگاه پرداخت موقتاً غیرفعال
+# from payment_server import start_payment_server, set_bot_instance
 
 
 async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -184,21 +187,37 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await admin_panel.admin_command(update, context)
 
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    """مدیریت خطاها - مخصوصاً Conflict"""
+    if isinstance(context.error, Conflict):
+        print("⚠️ Conflict detected: two bot instances running!")
+        print("⚠️ This instance will shutdown to avoid conflict.")
+        import os
+        os._exit(1)
+    else:
+        print(f"❌ Error: {context.error}")
+
+
 async def post_init(application: Application):
     """بعد از راه‌اندازی ربات"""
-    # ثبت instance ربات برای استفاده در وب‌سرور
-    set_bot_instance(application.bot)
-    print("✅ Bot instance registered for payment server")
+    # ⚠️ درگاه پرداخت موقتاً غیرفعال - این بخش کامنت شده
+    # set_bot_instance(application.bot)
+    # print("✅ Bot instance registered for payment server")
+    print("✅ Bot initialized")
 
 
 def main():
     print("🔵 در حال راه‌اندازی دیتابیس PostgreSQL...")
     init_db()
 
-    print("🌐 در حال راه‌اندازی وب‌سرور پرداخت...")
-    start_payment_server()
+    # ⚠️ وب‌سرور پرداخت موقتاً غیرفعال
+    # print("🌐 در حال راه‌اندازی وب‌سرور پرداخت...")
+    # start_payment_server()
 
     app = Application.builder().token(TOKEN).post_init(post_init).build()
+
+    # ⚠️ اضافه کردن error handler
+    app.add_error_handler(error_handler)
 
     app.add_handler(CommandHandler("start", user_panel.start))
     app.add_handler(CommandHandler("admin", admin_command))
