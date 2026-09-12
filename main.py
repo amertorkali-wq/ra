@@ -179,11 +179,8 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    """مدیریت خطاها"""
     if isinstance(context.error, Conflict):
-        # ⚠️ فقط لاگ کن - پروسه رو نکش
         print("⚠️ Conflict detected - another instance is running")
-        print("⚠️ This instance will continue but may miss some updates")
         return
     else:
         print(f"❌ Error: {context.error}")
@@ -199,7 +196,6 @@ def main():
 
     app = Application.builder().token(TOKEN).post_init(post_init).build()
 
-    # ⚠️ error handler
     app.add_error_handler(error_handler)
 
     app.add_handler(CommandHandler("start", user_panel.start))
@@ -230,7 +226,6 @@ def main():
     print("💾 دیتابیس: PostgreSQL (دائمی)")
     print("🚀 در حال اجرا...")
 
-    # ⚠️ drop_pending_updates=True برای جلوگیری از آپدیت‌های تکراری
     app.run_polling(
         allowed_updates=Update.ALL_TYPES,
         drop_pending_updates=True

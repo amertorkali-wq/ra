@@ -341,6 +341,9 @@ def get_admin_main_keyboard():
             InlineKeyboardButton("📞 لیست شماره‌ها", callback_data="adm_section_phones", style="success"),
             InlineKeyboardButton("🔴 وضعیت ربات", callback_data="adm_section_toggle", style="danger"),
         ],
+        [
+            InlineKeyboardButton("🏠 بازگشت به ربات", callback_data="adm_back_to_bot", style="success"),
+        ],
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -365,13 +368,29 @@ def get_admin_users_keyboard():
     return InlineKeyboardMarkup(keyboard)
 
 
+def get_admin_user_actions_keyboard(user_id, is_blocked=False):
+    """دکمه‌های عملیات روی کاربر (شیشه‌ای زیر اطلاعات کاربر)"""
+    block_text = "✅ رفع مسدودیت" if is_blocked else "🚫 مسدود سازی"
+    keyboard = [
+        [InlineKeyboardButton(block_text, callback_data=f"adm_user_toggle_block_{user_id}", style="danger")],
+        [InlineKeyboardButton("💰 افزایش موجودی", callback_data=f"adm_user_add_wallet_{user_id}", style="success")],
+        [InlineKeyboardButton("❓ افزایش سوال", callback_data=f"adm_user_add_question_{user_id}", style="success")],
+        [InlineKeyboardButton("📦 فعال کردن پکیج", callback_data=f"adm_user_activate_pkg_{user_id}", style="primary")],
+        [InlineKeyboardButton("🔙 بازگشت به کاربران", callback_data="adm_section_users", style="danger")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
 def get_admin_gift_keyboard():
     keyboard = [
         [
             InlineKeyboardButton("🎁 اهدا پکیج", callback_data="adm_gift_package", style="success"),
             InlineKeyboardButton("⏰ اهدا زمان", callback_data="adm_gift_time", style="primary"),
         ],
-        [InlineKeyboardButton("❓ اهدا سوال", callback_data="adm_gift_question", style="success")],
+        [
+            InlineKeyboardButton("❓ اهدا سوال", callback_data="adm_gift_question", style="success"),
+            InlineKeyboardButton("💰 اهدا موجودی", callback_data="adm_gift_wallet", style="primary"),
+        ],
         [InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_back", style="danger")],
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -397,7 +416,7 @@ def get_admin_staff_keyboard():
     keyboard = [
         [
             InlineKeyboardButton("☎️ پشتیبان‌ها", callback_data="adm_support_section", style="primary"),
-            InlineKeyboardButton("🧮 حسابدارها", callback_data="adm_accountant_section", style="success"),
+            InlineKeyboardButton("🧮 حسابدارها", callback_data="adm_accountant_section", style="primary"),
         ],
         [InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_back", style="danger")],
     ]
@@ -407,11 +426,11 @@ def get_admin_staff_keyboard():
 def get_admin_support_keyboard():
     keyboard = [
         [
-            InlineKeyboardButton("➕ افزودن پشتیبان", callback_data="adm_sup_add", style="success"),
-            InlineKeyboardButton("🗑 حذف پشتیبان", callback_data="adm_sup_remove", style="danger"),
+            InlineKeyboardButton("➕ افزودن پشتیبان", callback_data="adm_sup_add", style="primary"),
+            InlineKeyboardButton("🗑 حذف پشتیبان", callback_data="adm_sup_remove", style="primary"),
         ],
         [InlineKeyboardButton("📋 لیست پشتیبان‌ها", callback_data="adm_sup_list", style="primary")],
-        [InlineKeyboardButton("🔙 بازگشت به کادر", callback_data="adm_section_staff", style="danger")],
+        [InlineKeyboardButton("🔙 بازگشت به کادر", callback_data="adm_section_staff", style="primary")],
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -419,11 +438,11 @@ def get_admin_support_keyboard():
 def get_admin_accountant_keyboard():
     keyboard = [
         [
-            InlineKeyboardButton("➕ افزودن حسابدار", callback_data="adm_acc_add", style="success"),
-            InlineKeyboardButton("🗑 حذف حسابدار", callback_data="adm_acc_remove", style="danger"),
+            InlineKeyboardButton("➕ افزودن حسابدار", callback_data="adm_acc_add", style="primary"),
+            InlineKeyboardButton("🗑 حذف حسابدار", callback_data="adm_acc_remove", style="primary"),
         ],
         [InlineKeyboardButton("📋 لیست حسابدارها", callback_data="adm_acc_list", style="primary")],
-        [InlineKeyboardButton("🔙 بازگشت به کادر", callback_data="adm_section_staff", style="danger")],
+        [InlineKeyboardButton("🔙 بازگشت به کادر", callback_data="adm_section_staff", style="primary")],
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -509,14 +528,17 @@ def get_admin_settings_keyboard():
             InlineKeyboardButton("📝 متن‌ها", callback_data="adm_set_texts", style="primary"),
         ],
         [
-            InlineKeyboardButton("💰 تعرفه‌ها", callback_data="adm_set_prices", style="success"),
+            InlineKeyboardButton("💰 تعرفه‌ها", callback_data="adm_set_prices", style="primary"),
             InlineKeyboardButton("🗂 گروه‌ها", callback_data="adm_set_groups", style="primary"),
         ],
         [
             InlineKeyboardButton("📚 دروس", callback_data="adm_set_subjects", style="primary"),
             InlineKeyboardButton("🎛 دکمه‌ها", callback_data="adm_set_buttons", style="primary"),
         ],
-        [InlineKeyboardButton("🔧 عملکرد", callback_data="adm_set_performance", style="primary")],
+        [
+            InlineKeyboardButton("🔧 عملکرد", callback_data="adm_set_performance", style="primary"),
+            InlineKeyboardButton("🌐 پرداخت زیبال", callback_data="adm_set_zibal", style="primary"),
+        ],
         [InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_back", style="danger")],
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -549,4 +571,19 @@ def get_confirm_cancel_buttons(action, id_):
             InlineKeyboardButton("❌ لغو", callback_data="adm_back", style="danger"),
         ],
     ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_admin_package_select_keyboard(user_id):
+    """انتخاب پکیج برای فعال‌سازی توسط ادمین"""
+    keyboard = []
+    for pkg in DEFAULT_PACKAGES:
+        if pkg['is_start']:
+            continue
+        keyboard.append([InlineKeyboardButton(
+            f"📦 {pkg['name']} ({pkg['questions']} سوال)",
+            callback_data=f"adm_activate_pkg_{user_id}_{pkg['id']}",
+            style="primary"
+        )])
+    keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="adm_section_users", style="danger")])
     return InlineKeyboardMarkup(keyboard)

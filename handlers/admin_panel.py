@@ -4,7 +4,10 @@ from telegram import (
 )
 from telegram.ext import ContextTypes
 
-from config import OWNER_ID, DEFAULT_PACKAGES, SUBJECTS
+from config import (
+    OWNER_ID, DEFAULT_PACKAGES, SUBJECTS,
+    ZIBAL_MERCHANT, ZIBAL_SANDBOX, ZIBAL_ENABLED
+)
 from database import (
     get_stats, get_all_users, get_user, update_user, is_staff,
     add_staff, remove_staff, get_staff_list, get_user_role,
@@ -21,6 +24,7 @@ from keyboards import (
     get_admin_main_keyboard,
     get_admin_back_button,
     get_admin_users_keyboard,
+    get_admin_user_actions_keyboard,
     get_admin_gift_keyboard,
     get_admin_teachers_keyboard,
     get_admin_staff_keyboard,
@@ -37,6 +41,8 @@ from keyboards import (
     get_admin_toggle_keyboard,
     get_admin_phones_keyboard,
     get_confirm_cancel_buttons,
+    get_admin_package_select_keyboard,
+    get_main_menu_keyboard,
 )
 
 
@@ -101,6 +107,17 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         except:
             pass
 
+    # ---- بازگشت به ربات ----
+    elif data == "adm_back_to_bot":
+        try:
+            await query.message.delete()
+        except:
+            pass
+        await query.message.reply_text(
+            "🏠 به پنل عمومی ربات بازگشتید.",
+            reply_markup=get_main_menu_keyboard()
+        )
+
     # ---- کاربران ----
     elif data == "adm_section_users":
         try:
@@ -139,6 +156,159 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         context.user_data['adm_state'] = 'awaiting_purchases_user_id'
 
+    # ---- دکمه‌های عملیات روی کاربر ----
+    elif data.startswith("adm_user_toggle_block_"):
+        uid = int(data.replace("adm_user_toggle_block_", ""))
+        user_data = get_user(uid)
+        if not user_data:
+            await query.answer("⚠️ کاربر یافت نشد.", show_alert=True)
+            return
+        
+        new_status = 0 if user_data[16] else 1
+        update_user(uid, is_blocked=new_status)
+        status_text = "مسدود شد ✅" if new_status else "رفع مسدودیت شد ✅"
+        
+        await query.answer(f"✅ کاربر {uid} {status_text}", show_alert=True)
+        
+        # بروزرسانی پیام
+        fresh = get_user(uid)
+        is_blocked = bool(fresh[16])
+        block_status = "🔴 مسدود" if is_blocked else "🟢 فعال"
+        
+        text_info = (
+            f"👤 *اطلاعات کاربر* `{uid}`\n\n"
+            f"📛 نام: {fresh[2] or ''} {fresh[3] or ''}\n"
+            f"🔗 یوزرنیم: @{fresh[1] or 'ندارد'}\n"
+            f"📱 شماره: `{fresh[4] or 'ندارد'}`\n"
+            f"✅ تأیید شماره: {'✅ بله' if fresh[5] else '❌ خیر'}\n\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"💰 کیف پول: *{fresh[7]:,}* تومان\n"
+            f"📚 سوالات باقی: *{fresh[8]}*\n"
+            f"📅 سوالات استفاده‌شده: {fresh[9]}\n"
+            f"🎁 پکیج فعال: {fresh[10]}\n"
+            f"⏳ اعتبار تا: {fresh[11]}\n\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"👥 زیرمجموعه: {fresh[12]}\n"
+            f"🛡 وضعیت: {block_status}"
+        )
+        
+        try:
+            await query.edit_message_text(
+                text_info,
+                reply_markup=get_admin_user_actions_keyboard(uid, is_blocked),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+
+    elif data.startswith("adm_user_add_wallet_"):
+        uid = int(data.replace("adm_user_add_wallet_", ""))
+        context.user_data['adm_action_user_id'] = uid
+        context.user_data['adm_action_type'] = 'wallet'
+        await query.edit_message_text(
+            f"💰 *افزایش موجودی کاربر* `{uid}`\n\n"
+            f"لطفاً مبلغ (به تومان) را وارد کنید:",
+            reply_markup=get_admin_back_button(),
+            parse_mode="Markdown"
+        )
+        context.user_data['adm_state'] = 'awaiting_user_action_value'
+
+    elif data.startswith("adm_user_add_question_"):
+        uid = int(data.replace("adm_user_add_question_", ""))
+        context.user_data['adm_action_user_id'] = uid
+        context.user_data['adm_action_type'] = 'question'
+        await query.edit_message_text(
+            f"❓ *افزایش سوال کاربر* `{uid}`\n\n"
+            f"لطفاً تعداد سوالات را وارد کنید:",
+            reply_markup=get_admin_back_button(),
+            parse_mode="Markdown"
+        )
+        context.user_data['adm_state'] = 'awaiting_user_action_value'
+
+    elif data.startswith("adm_user_activate_pkg_"):
+        uid = int(data.replace("adm_user_activate_pkg_", ""))
+        context.user_data['adm_action_user_id'] = uid
+        await query.edit_message_text(
+            f"📦 *فعال کردن پکیج برای کاربر* `{uid}`\n\n"
+            f"لطفاً پکیج مورد نظر را انتخاب کنید:",
+            reply_markup=get_admin_package_select_keyboard(uid),
+            parse_mode="Markdown"
+        )
+
+    elif data.startswith("adm_activate_pkg_"):
+        # فرمت: adm_activate_pkg_{user_id}_{pkg_id}
+        parts = data.replace("adm_activate_pkg_", "").split("_")
+        uid = int(parts[0])
+        pkg_id = int(parts[1])
+        
+        pkg = next((p for p in DEFAULT_PACKAGES if p['id'] == pkg_id), None)
+        if not pkg:
+            await query.answer("⚠️ پکیج یافت نشد.", show_alert=True)
+            return
+        
+        user_data = get_user(uid)
+        if not user_data:
+            await query.answer("⚠️ کاربر یافت نشد.", show_alert=True)
+            return
+        
+        new_questions = (user_data[8] or 0) + pkg['questions']
+        expire_date = get_shamsi_future_date(pkg['days'])
+        
+        update_user(
+            uid,
+            questions_remaining=new_questions,
+            active_package=pkg['name'],
+            package_expire_date=expire_date
+        )
+        
+        await query.answer(f"✅ پکیج {pkg['name']} فعال شد.", show_alert=True)
+        
+        try:
+            await context.bot.send_message(
+                chat_id=uid,
+                text=(
+                    f"🎁 *پکیج برای شما فعال شد!*\n\n"
+                    f"📦 پکیج: {pkg['name']}\n"
+                    f"❓ تعداد سوال: {pkg['questions']}\n"
+                    f"⏳ اعتبار تا: {expire_date}\n\n"
+                    f"🌟 موفق باشید!"
+                ),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+        
+        # بروزرسانی پیام
+        fresh = get_user(uid)
+        is_blocked = bool(fresh[16])
+        block_status = "🔴 مسدود" if is_blocked else "🟢 فعال"
+        
+        text_info = (
+            f"👤 *اطلاعات کاربر* `{uid}`\n\n"
+            f"📛 نام: {fresh[2] or ''} {fresh[3] or ''}\n"
+            f"🔗 یوزرنیم: @{fresh[1] or 'ندارد'}\n"
+            f"📱 شماره: `{fresh[4] or 'ندارد'}`\n"
+            f"✅ تأیید شماره: {'✅ بله' if fresh[5] else '❌ خیر'}\n\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"💰 کیف پول: *{fresh[7]:,}* تومان\n"
+            f"📚 سوالات باقی: *{fresh[8]}*\n"
+            f"📅 سوالات استفاده‌شده: {fresh[9]}\n"
+            f"🎁 پکیج فعال: {fresh[10]}\n"
+            f"⏳ اعتبار تا: {fresh[11]}\n\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"👥 زیرمجموعه: {fresh[12]}\n"
+            f"🛡 وضعیت: {block_status}"
+        )
+        
+        try:
+            await query.edit_message_text(
+                text_info,
+                reply_markup=get_admin_user_actions_keyboard(uid, is_blocked),
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+
     # ---- هدایا ----
     elif data == "adm_section_gift":
         try:
@@ -169,6 +339,13 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=get_admin_back_button()
         )
         context.user_data['adm_state'] = 'awaiting_gift_question_user_id'
+
+    elif data == "adm_gift_wallet":
+        await query.edit_message_text(
+            "💰 اهدای موجودی\n\nلطفاً آیدی عددی کاربر را ارسال کنید:",
+            reply_markup=get_admin_back_button()
+        )
+        context.user_data['adm_state'] = 'awaiting_gift_wallet_user_id'
 
     # ---- دبیران ----
     elif data == "adm_section_teachers":
@@ -571,8 +748,30 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
         except:
             pass
 
+    elif data == "adm_set_zibal":
+        await query.edit_message_text(
+            "🌐 *تنظیمات پرداخت زیبال*\n\n"
+            f"🔑 مرچنت: `{ZIBAL_MERCHANT}`\n"
+            f"🔧 حالت: {'🧪 Sandbox' if ZIBAL_SANDBOX else '🚀 Production'}\n"
+            f"✅ فعال: {'🟢 بله' if ZIBAL_ENABLED else '🔴 خیر'}\n\n"
+            "برای تغییر، فایل `config.py` را ویرایش کنید.",
+            reply_markup=get_admin_settings_keyboard(),
+            parse_mode="Markdown"
+        )
+
     elif data.startswith("adm_set_"):
-        await query.answer("🚧 این بخش در حال ساخت است.", show_alert=True)
+        setting_name = data.replace("adm_set_", "")
+        names = {
+            "force": "جوین اجباری",
+            "texts": "متن‌ها",
+            "prices": "تعرفه‌ها",
+            "groups": "گروه‌ها",
+            "subjects": "دروس",
+            "buttons": "دکمه‌ها",
+            "performance": "عملکرد",
+        }
+        name = names.get(setting_name, setting_name)
+        await query.answer(f"🚧 بخش «{name}» در حال ساخت است.", show_alert=True)
 
     # ---- وضعیت ربات ----
     elif data == "adm_section_toggle":
@@ -630,7 +829,7 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
                 return
 
             output = StringIO()
-            output.write("\ufeff")  # BOM برای اکسل
+            output.write("\ufeff")
             writer = csv.writer(output)
             writer.writerow(["User ID", "Username", "First Name", "Last Name", "Phone", "Created At"])
             for row in rows:
@@ -671,8 +870,289 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not text:
         return False
 
+    # ---- عملیات روی کاربر (افزایش موجودی/سوال) ----
+    if state == 'awaiting_user_action_value':
+        uid = context.user_data.get('adm_action_user_id')
+        action_type = context.user_data.get('adm_action_type')
+
+        if not uid or not action_type:
+            await update.message.reply_text("⚠️ خطا در اطلاعات. لطفاً دوباره تلاش کنید.")
+            context.user_data.pop('adm_state', None)
+            return True
+
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ لطفاً یک عدد معتبر وارد کنید.")
+            return True
+
+        value = int(text)
+        user_data = get_user(uid)
+
+        if not user_data:
+            await update.message.reply_text("⚠️ کاربر یافت نشد.")
+            context.user_data.pop('adm_state', None)
+            return True
+
+        if action_type == 'wallet':
+            new_wallet = (user_data[7] or 0) + value
+            update_user(uid, wallet=new_wallet)
+
+            await update.message.reply_text(
+                f"✅ *{value:,} تومان* به کیف پول کاربر `{uid}` اضافه شد.\n\n"
+                f"💰 موجودی جدید: {new_wallet:,} تومان",
+                parse_mode="Markdown"
+            )
+
+            try:
+                await context.bot.send_message(
+                    chat_id=uid,
+                    text=f"🎁 {value:,} تومان به کیف پول شما اضافه شد."
+                )
+            except:
+                pass
+
+        elif action_type == 'question':
+            new_questions = (user_data[8] or 0) + value
+            update_user(uid, questions_remaining=new_questions)
+
+            await update.message.reply_text(
+                f"✅ *{value} سوال* به کاربر `{uid}` اضافه شد.\n\n"
+                f"📚 سوالات باقی‌مانده: {new_questions}",
+                parse_mode="Markdown"
+            )
+
+            try:
+                await context.bot.send_message(
+                    chat_id=uid,
+                    text=f"🎁 {value} سوال به حساب شما اضافه شد."
+                )
+            except:
+                pass
+
+        context.user_data.pop('adm_state', None)
+        context.user_data.pop('adm_action_user_id', None)
+        context.user_data.pop('adm_action_type', None)
+
+    # ---- جستجوی کاربر ----
+    elif state == 'awaiting_search_user_id':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
+            return True
+        uid = int(text)
+        user_data = get_user(uid)
+        if not user_data:
+            await update.message.reply_text("⚠️ کاربر یافت نشد.")
+        else:
+            is_blocked = bool(user_data[16])
+            block_status = "🔴 مسدود" if is_blocked else "🟢 فعال"
+
+            text_info = (
+                f"👤 *اطلاعات کاربر* `{uid}`\n\n"
+                f"📛 نام: {user_data[2] or ''} {user_data[3] or ''}\n"
+                f"🔗 یوزرنیم: @{user_data[1] or 'ندارد'}\n"
+                f"📱 شماره: `{user_data[4] or 'ندارد'}`\n"
+                f"✅ تأیید شماره: {'✅ بله' if user_data[5] else '❌ خیر'}\n\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"💰 کیف پول: *{user_data[7]:,}* تومان\n"
+                f"📚 سوالات باقی: *{user_data[8]}*\n"
+                f"📅 سوالات استفاده‌شده: {user_data[9]}\n"
+                f"🎁 پکیج فعال: {user_data[10]}\n"
+                f"⏳ اعتبار تا: {user_data[11]}\n\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"👥 زیرمجموعه: {user_data[12]}\n"
+                f"🛡 وضعیت: {block_status}"
+            )
+
+            await update.message.reply_text(
+                text_info,
+                reply_markup=get_admin_user_actions_keyboard(uid, is_blocked),
+                parse_mode="Markdown"
+            )
+        context.user_data.pop('adm_state', None)
+
+    # ---- مسدود/رفع ----
+    elif state == 'awaiting_block_user_id':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
+            return True
+        uid = int(text)
+        user_data = get_user(uid)
+        if not user_data:
+            await update.message.reply_text("⚠️ کاربر یافت نشد.")
+        else:
+            new_status = 0 if user_data[16] else 1
+            update_user(uid, is_blocked=new_status)
+            status_text = "مسدود شد ✅" if new_status else "رفع مسدود شد ✅"
+            await update.message.reply_text(f"✅ کاربر {uid} {status_text}")
+        context.user_data.pop('adm_state', None)
+
+    # ---- ارسال هدیه (پول) ----
+    elif state == 'awaiting_gift_user_id':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
+            return True
+        uid = int(text)
+        context.user_data['gift_user_id'] = uid
+        await update.message.reply_text("🎁 لطفاً مبلغ هدیه (به تومان) را وارد کنید:")
+        context.user_data['adm_state'] = 'awaiting_gift_amount'
+
+    elif state == 'awaiting_gift_amount':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ مبلغ باید عددی باشد.")
+            return True
+        amount = int(text)
+        uid = context.user_data.get('gift_user_id')
+        user_data = get_user(uid)
+        if user_data:
+            new_wallet = (user_data[7] or 0) + amount
+            update_user(uid, wallet=new_wallet)
+            await update.message.reply_text(f"✅ {amount:,} تومان به کاربر {uid} هدیه داده شد.")
+            try:
+                await context.bot.send_message(
+                    chat_id=uid,
+                    text=f"🎁 هدیه {amount:,} تومانی به کیف پول شما اضافه شد."
+                )
+            except:
+                pass
+        context.user_data.pop('adm_state', None)
+        context.user_data.pop('gift_user_id', None)
+
+    # ---- اهدا موجودی ----
+    elif state == 'awaiting_gift_wallet_user_id':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
+            return True
+        uid = int(text)
+        user_data = get_user(uid)
+        if not user_data:
+            await update.message.reply_text("⚠️ کاربر یافت نشد.")
+            context.user_data.pop('adm_state', None)
+            return True
+
+        context.user_data['gift_wallet_user_id'] = uid
+        await update.message.reply_text("💰 لطفاً مبلغ هدیه (به تومان) را وارد کنید:")
+        context.user_data['adm_state'] = 'awaiting_gift_wallet_amount'
+
+    elif state == 'awaiting_gift_wallet_amount':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ مبلغ باید عددی باشد.")
+            return True
+        amount = int(text)
+        uid = context.user_data.get('gift_wallet_user_id')
+        user_data = get_user(uid)
+
+        if user_data:
+            new_wallet = (user_data[7] or 0) + amount
+            update_user(uid, wallet=new_wallet)
+
+            await update.message.reply_text(
+                f"✅ {amount:,} تومان به کاربر {uid} هدیه داده شد."
+            )
+
+            try:
+                await context.bot.send_message(
+                    chat_id=uid,
+                    text=f"🎁 هدیه {amount:,} تومانی به کیف پول شما اضافه شد."
+                )
+            except:
+                pass
+
+        context.user_data.pop('adm_state', None)
+        context.user_data.pop('gift_wallet_user_id', None)
+
+    # ---- اهدای پکیج ----
+    elif state == 'awaiting_gift_package_user_id':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
+            return True
+        uid = int(text)
+        context.user_data['gift_package_user_id'] = uid
+        await update.message.reply_text(
+            "📦 لطفاً نام پکیج رو وارد کنید:\n\n"
+            "مثال: پکیج 1 ماهه"
+        )
+        context.user_data['adm_state'] = 'awaiting_gift_package_name'
+
+    elif state == 'awaiting_gift_package_name':
+        pkg_name = text
+        uid = context.user_data.get('gift_package_user_id')
+        user_data = get_user(uid)
+        if user_data:
+            update_user(uid, active_package=pkg_name)
+            await update.message.reply_text(f"✅ پکیج {pkg_name} به کاربر {uid} هدیه داده شد.")
+            try:
+                await context.bot.send_message(
+                    chat_id=uid,
+                    text=f"🎁 پکیج {pkg_name} به شما هدیه داده شد!"
+                )
+            except:
+                pass
+        context.user_data.pop('adm_state', None)
+        context.user_data.pop('gift_package_user_id', None)
+
+    # ---- اهدای مدت زمان ----
+    elif state == 'awaiting_gift_time_user_id':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
+            return True
+        uid = int(text)
+        context.user_data['gift_time_user_id'] = uid
+        await update.message.reply_text("⏰ لطفاً تعداد روزهای هدیه رو وارد کنید:")
+        context.user_data['adm_state'] = 'awaiting_gift_time_days'
+
+    elif state == 'awaiting_gift_time_days':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ تعداد روز باید عددی باشد.")
+            return True
+        days = int(text)
+        uid = context.user_data.get('gift_time_user_id')
+        new_expire = get_shamsi_future_date(days)
+        user_data = get_user(uid)
+        if user_data:
+            update_user(uid, package_expire_date=new_expire)
+            await update.message.reply_text(f"✅ {days} روز به اعتبار کاربر {uid} اضافه شد.")
+            try:
+                await context.bot.send_message(
+                    chat_id=uid,
+                    text=f"🎁 {days} روز به اعتبار شما اضافه شد!\n⏳ اعتبار جدید تا: {new_expire}"
+                )
+            except:
+                pass
+        context.user_data.pop('adm_state', None)
+        context.user_data.pop('gift_time_user_id', None)
+
+    # ---- اهدای سوال ----
+    elif state == 'awaiting_gift_question_user_id':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
+            return True
+        uid = int(text)
+        context.user_data['gift_question_user_id'] = uid
+        await update.message.reply_text("❓ لطفاً تعداد سوالات هدیه رو وارد کنید:")
+        context.user_data['adm_state'] = 'awaiting_gift_question_count'
+
+    elif state == 'awaiting_gift_question_count':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ تعداد باید عددی باشد.")
+            return True
+        count = int(text)
+        uid = context.user_data.get('gift_question_user_id')
+        user_data = get_user(uid)
+        if user_data:
+            new_questions = (user_data[8] or 0) + count
+            update_user(uid, questions_remaining=new_questions)
+            await update.message.reply_text(f"✅ {count} سوال به کاربر {uid} هدیه داده شد.")
+            try:
+                await context.bot.send_message(
+                    chat_id=uid,
+                    text=f"🎁 {count} سوال به حساب شما اضافه شد!"
+                )
+            except:
+                pass
+        context.user_data.pop('adm_state', None)
+        context.user_data.pop('gift_question_user_id', None)
+
     # ---- افزودن دبیر: مرحله ۱ - آیدی ----
-    if state == 'awaiting_teacher_id':
+    elif state == 'awaiting_teacher_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
             return True
@@ -737,7 +1217,7 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context.user_data.pop('adm_state', None)
         context.user_data.pop('connect_teacher_id', None)
 
-    # ---- ویرایش دبیر: مرحله ۱ - آیدی ----
+    # ---- ویرایش دبیر ----
     elif state == 'awaiting_edit_teacher_id':
         if not text.isdigit():
             await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
@@ -859,46 +1339,6 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"✅ حسابدار {aid} حذف شد.")
         context.user_data.pop('adm_state', None)
 
-    # ---- جستجوی کاربر ----
-    elif state == 'awaiting_search_user_id':
-        if not text.isdigit():
-            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
-            return True
-        uid = int(text)
-        user_data = get_user(uid)
-        if not user_data:
-            await update.message.reply_text("⚠️ کاربر یافت نشد.")
-        else:
-            await update.message.reply_text(
-                f"👤 اطلاعات کاربر {uid}\n\n"
-                f"نام: {user_data[2] or ''} {user_data[3] or ''}\n"
-                f"یوزرنیم: @{user_data[1] or 'ندارد'}\n"
-                f"شماره: {user_data[4] or 'ندارد'}\n"
-                f"کیف پول: {user_data[7]:,} تومان\n"
-                f"سوالات باقی: {user_data[8]}\n"
-                f"سوالات استفاده‌شده: {user_data[9]}\n"
-                f"پکیج فعال: {user_data[10]}\n"
-                f"زیرمجموعه: {user_data[12]}\n"
-                f"مسدود: {'✅ بله' if user_data[16] else '❌ خیر'}"
-            )
-        context.user_data.pop('adm_state', None)
-
-    # ---- مسدود/رفع مسدود ----
-    elif state == 'awaiting_block_user_id':
-        if not text.isdigit():
-            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
-            return True
-        uid = int(text)
-        user_data = get_user(uid)
-        if not user_data:
-            await update.message.reply_text("⚠️ کاربر یافت نشد.")
-        else:
-            new_status = 0 if user_data[16] else 1
-            update_user(uid, is_blocked=new_status)
-            status_text = "مسدود شد ✅" if new_status else "رفع مسدود شد ✅"
-            await update.message.reply_text(f"✅ کاربر {uid} {status_text}")
-        context.user_data.pop('adm_state', None)
-
     # ---- مشاهده خریدها ----
     elif state == 'awaiting_purchases_user_id':
         if not text.isdigit():
@@ -944,129 +1384,6 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 )
             await update.message.reply_text(out)
         context.user_data.pop('adm_state', None)
-
-    # ---- ارسال هدیه پول ----
-    elif state == 'awaiting_gift_user_id':
-        if not text.isdigit():
-            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
-            return True
-        uid = int(text)
-        context.user_data['gift_user_id'] = uid
-        await update.message.reply_text("🎁 لطفاً مبلغ هدیه (به تومان) را وارد کنید:")
-        context.user_data['adm_state'] = 'awaiting_gift_amount'
-
-    elif state == 'awaiting_gift_amount':
-        if not text.isdigit():
-            await update.message.reply_text("⚠️ مبلغ باید عددی باشد.")
-            return True
-        amount = int(text)
-        uid = context.user_data.get('gift_user_id')
-        user_data = get_user(uid)
-        if user_data:
-            new_wallet = user_data[7] + amount
-            update_user(uid, wallet=new_wallet)
-            await update.message.reply_text(f"✅ {amount:,} تومان به کاربر {uid} هدیه داده شد.")
-            try:
-                await context.bot.send_message(
-                    chat_id=uid,
-                    text=f"🎁 هدیه {amount:,} تومانی به کیف پول شما اضافه شد."
-                )
-            except:
-                pass
-        context.user_data.pop('adm_state', None)
-        context.user_data.pop('gift_user_id', None)
-
-    # ---- اهدای پکیج ----
-    elif state == 'awaiting_gift_package_user_id':
-        if not text.isdigit():
-            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
-            return True
-        uid = int(text)
-        context.user_data['gift_package_user_id'] = uid
-        await update.message.reply_text(
-            "📦 لطفاً نام پکیج رو وارد کنید:\n\n"
-            "مثال: پکیج 1 ماهه"
-        )
-        context.user_data['adm_state'] = 'awaiting_gift_package_name'
-
-    elif state == 'awaiting_gift_package_name':
-        pkg_name = text
-        uid = context.user_data.get('gift_package_user_id')
-        user_data = get_user(uid)
-        if user_data:
-            update_user(uid, active_package=pkg_name)
-            await update.message.reply_text(f"✅ پکیج {pkg_name} به کاربر {uid} هدیه داده شد.")
-            try:
-                await context.bot.send_message(
-                    chat_id=uid,
-                    text=f"🎁 پکیج {pkg_name} به شما هدیه داده شد!"
-                )
-            except:
-                pass
-        context.user_data.pop('adm_state', None)
-        context.user_data.pop('gift_package_user_id', None)
-
-    # ---- اهدای مدت زمان ----
-    elif state == 'awaiting_gift_time_user_id':
-        if not text.isdigit():
-            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
-            return True
-        uid = int(text)
-        context.user_data['gift_time_user_id'] = uid
-        await update.message.reply_text("⏰ لطفاً تعداد روزهای هدیه رو وارد کنید:")
-        context.user_data['adm_state'] = 'awaiting_gift_time_days'
-
-    elif state == 'awaiting_gift_time_days':
-        if not text.isdigit():
-            await update.message.reply_text("⚠️ تعداد روز باید عددی باشد.")
-            return True
-        days = int(text)
-        uid = context.user_data.get('gift_time_user_id')
-        new_expire = get_shamsi_future_date(days)
-        user_data = get_user(uid)
-        if user_data:
-            update_user(uid, package_expire_date=new_expire)
-            await update.message.reply_text(f"✅ {days} روز به اعتبار کاربر {uid} اضافه شد.")
-            try:
-                await context.bot.send_message(
-                    chat_id=uid,
-                    text=f"🎁 {days} روز به اعتبار شما اضافه شد!\n⏳ اعتبار جدید تا: {new_expire}"
-                )
-            except:
-                pass
-        context.user_data.pop('adm_state', None)
-        context.user_data.pop('gift_time_user_id', None)
-
-    # ---- اهدای سوال ----
-    elif state == 'awaiting_gift_question_user_id':
-        if not text.isdigit():
-            await update.message.reply_text("⚠️ آیدی باید عددی باشد.")
-            return True
-        uid = int(text)
-        context.user_data['gift_question_user_id'] = uid
-        await update.message.reply_text("❓ لطفاً تعداد سوالات هدیه رو وارد کنید:")
-        context.user_data['adm_state'] = 'awaiting_gift_question_count'
-
-    elif state == 'awaiting_gift_question_count':
-        if not text.isdigit():
-            await update.message.reply_text("⚠️ تعداد باید عددی باشد.")
-            return True
-        count = int(text)
-        uid = context.user_data.get('gift_question_user_id')
-        user_data = get_user(uid)
-        if user_data:
-            new_questions = user_data[8] + count
-            update_user(uid, questions_remaining=new_questions)
-            await update.message.reply_text(f"✅ {count} سوال به کاربر {uid} هدیه داده شد.")
-            try:
-                await context.bot.send_message(
-                    chat_id=uid,
-                    text=f"🎁 {count} سوال به حساب شما اضافه شد!"
-                )
-            except:
-                pass
-        context.user_data.pop('adm_state', None)
-        context.user_data.pop('gift_question_user_id', None)
 
     # ---- پیام همگانی ----
     elif state == 'awaiting_broadcast':

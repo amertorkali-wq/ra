@@ -39,6 +39,8 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_status TEXT DEFAULT 'pending'")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_completed_at TEXT DEFAULT NULL")
         c.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS package_id INTEGER DEFAULT NULL")
+        c.execute("ALTER TABLE staff ADD COLUMN IF NOT EXISTS display_name TEXT DEFAULT NULL")
+        c.execute("ALTER TABLE staff ADD COLUMN IF NOT EXISTS subject TEXT DEFAULT NULL")
         conn.commit()
         print("✅ Migration انجام شد")
     except Exception as e:
@@ -888,17 +890,6 @@ def add_transaction(user_id, amount, card_number, transaction_id, status, type_)
 # ============================================
 
 def create_payment_record(user_id, authority, amount, description, card_id=None, package_id=None):
-    """
-    ساخت رکورد پرداخت در دیتابیس
-
-    Args:
-        user_id: آیدی کاربر
-        authority: trackId زیبال
-        amount: مبلغ (تومان)
-        description: توضیحات
-        card_id: آیدی کارت
-        package_id: آیدی پکیج
-    """
     conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
@@ -918,7 +909,6 @@ def create_payment_record(user_id, authority, amount, description, card_id=None,
 
 
 def get_payment_by_authority(authority):
-    """گرفتن پرداخت بر اساس authority (tuple)"""
     conn = get_connection()
     c = conn.cursor()
     c.execute("SELECT * FROM payments WHERE authority = %s", (str(authority),))
@@ -929,7 +919,6 @@ def get_payment_by_authority(authority):
 
 
 def get_payment_by_authority_full(authority):
-    """گرفتن پرداخت با تمام فیلدها (dict)"""
     conn = get_connection()
     c = conn.cursor()
     c.execute("""
@@ -961,7 +950,6 @@ def get_payment_by_authority_full(authority):
 
 
 def update_payment_status(authority, status, ref_id=None, card_pan=None):
-    """به‌روزرسانی وضعیت پرداخت"""
     conn = get_connection()
     c = conn.cursor()
     now = get_shamsi_now()
@@ -984,7 +972,6 @@ def update_payment_status(authority, status, ref_id=None, card_pan=None):
 
 
 def is_payment_verified(authority):
-    """آیا این پرداخت قبلاً verify شده؟ (جلوگیری از double-spend)"""
     conn = get_connection()
     c = conn.cursor()
     c.execute(
