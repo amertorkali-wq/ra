@@ -5,7 +5,7 @@ import os
 # ============================================
 
 # ---------- توکن ربات ----------
-TOKEN = os.environ.get("BOT_TOKEN", "8762301184:AAGbn9CZirNf7Yc9nRdnBpQMfFGEnu8r9wA")
+TOKEN = os.environ.get("BOT_TOKEN", "8849773001:AAFY4Uqiz16PCJNjZv7loZYPhIDKraBFpHc")
 
 # ---------- کانال جوین اجباری ----------
 CHANNEL_ID = -1003858232624
