@@ -12,7 +12,7 @@ from config import (
     CHANNEL_ID, BOT_LINK, DEFAULT_PACKAGES,
     SUBJECTS, ABOUT_IMAGE_URL, ACCOUNTING_GROUP, SUPPORT_GROUP,
     SMSIR_API_KEY, SMSIR_TEMPLATE_ID, SMSIR_LINE_NUMBER,
-    TRANSACTION_CHANNEL
+    TRANSACTION_CHANNEL, ZIBAL_ENABLED
 )
 from database import (
     get_user, create_user, update_user, get_user_cards, get_verified_cards,
@@ -157,7 +157,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         create_user(user_id, user.username, user.first_name, user.last_name, invited_by)
 
     if await is_user_member(context.application, user_id):
-        # ⚠️ پاداش اینجا داده نمی‌شه! فقط بعد از احراز هویت کامل
         await update.message.reply_text(
             WELCOME_MSG,
             reply_markup=get_main_menu_keyboard()
@@ -177,7 +176,6 @@ async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE)
     message = query.message
 
     if await is_user_member(context.application, user_id):
-        # ⚠️ پاداش اینجا داده نمی‌شه!
         try:
             await message.delete()
         except:
@@ -379,6 +377,15 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
 
     # ---- انتخاب کارت → ساخت تراکنش واقعی زیبال ----
     elif data.startswith("pay_card_"):
+        # ⚠️ اگه درگاه غیرفعال باشه
+        if not ZIBAL_ENABLED:
+            await query.answer(
+                "⚠️ درگاه پرداخت موقتاً غیرفعال است.\n"
+                "لطفاً بعداً تلاش کنید یا با پشتیبانی تماس بگیرید.",
+                show_alert=True
+            )
+            return
+
         card_id = int(data.split("_")[2])
         pkg = context.user_data.get('selected_package')
         if not pkg:
@@ -387,7 +394,6 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
 
         context.user_data['selected_card_id'] = card_id
 
-        # توضیحات
         description = f"خرید {pkg['name']} - ویولکس"
 
         # درخواست پرداخت از زیبال
@@ -416,7 +422,6 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
         authority = result['authority']
         payment_url = result['payment_url']
 
-        # ثبت در دیتابیس
         create_payment_record(
             user_id=user_id,
             authority=authority,
@@ -426,12 +431,10 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
             package_id=pkg['id'],
         )
 
-        # ذخیره در context
         context.user_data['payment_authority'] = authority
         context.user_data['payment_amount'] = pkg['price']
         context.user_data['payment_url'] = payment_url
 
-        # پیام به کاربر با دکمه پرداخت
         text = (
             f"🧾 *پیش‌فاکتور پرداخت*\n\n"
             f"📦 پکیج: {pkg['name']}\n"
@@ -462,9 +465,16 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
 
     # ---- کاربر می‌گه پرداخت کردم → verify ----
     elif data.startswith("verify_pay_"):
+        # ⚠️ اگه درگاه غیرفعال باشه
+        if not ZIBAL_ENABLED:
+            await query.answer(
+                "⚠️ درگاه پرداخت موقتاً غیرفعال است.",
+                show_alert=True
+            )
+            return
+
         authority = data.split("_", 2)[2]
 
-        # بررسی وجود پرداخت
         payment = get_payment_by_authority_full(authority)
         if not payment:
             await query.answer("⚠️ تراکنش یافت نشد.", show_alert=True)
@@ -474,7 +484,6 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
             await query.answer("⛔ این تراکنش مال شما نیست.", show_alert=True)
             return
 
-        # اگه قبلاً verified شده
         if payment['status'] == 'verified':
             await query.answer("✅ این پرداخت قبلاً تأیید شده است.", show_alert=True)
             try:
@@ -488,7 +497,6 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
                 pass
             return
 
-        # اگه failed شده
         if payment['status'] == 'failed':
             await query.answer("❌ این تراکنش ناموفق بوده.", show_alert=True)
             try:
@@ -502,17 +510,14 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
                 pass
             return
 
-        # نمایش پیام انتظار
         await query.answer("⏳ در حال بررسی پرداخت...", show_alert=False)
 
-        # Verify با API زیبال
         verify_result = verify_payment(int(authority), amount_toman=payment['amount'])
 
         if not verify_result.get('success'):
             error = verify_result.get('error', 'خطای نامشخص')
             code = verify_result.get('code')
 
-            # اگه پرداخت انجام نشده
             if code == 202:
                 try:
                     await query.edit_message_text(
@@ -541,7 +546,6 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
                 pass
             return
 
-        # بررسی مبلغ
         paid_amount_rial = verify_result.get('amount_rial', 0)
         expected_amount_rial = payment['amount'] * 10
 
@@ -565,13 +569,11 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
         update_payment_status(authority, 'verified', ref_id, card_pan)
         add_transaction(user_id, payment['amount'], card_pan, ref_id, "success", "package")
 
-        # فعال‌سازی پکیج
         pkg = None
         if payment['package_id'] is not None:
             pkg = next((p for p in DEFAULT_PACKAGES if p['id'] == payment['package_id']), None)
 
         if pkg:
-            # بازخوانی اطلاعات کاربر از دیتابیس
             fresh_user = get_user_info(user_id)
             current_questions = fresh_user['questions_remaining'] if fresh_user else 0
             new_questions = current_questions + pkg['questions']
@@ -600,7 +602,6 @@ async def handle_balance_buttons(update: Update, context: ContextTypes.DEFAULT_T
             except:
                 pass
 
-            # گزارش به کانال
             try:
                 await context.bot.send_message(
                     chat_id=TRANSACTION_CHANNEL,
@@ -998,7 +999,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update_user(user_id, phone_verified=1)
             context.user_data['awaiting_card_number'] = True
 
-            # ⚠️ پاداش به دعوت‌کننده بعد از احراز هویت موفق
             inviter_id = reward_inviter(user_id)
             if inviter_id:
                 try:
@@ -1015,7 +1015,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except:
                     pass
 
-            # ⚠️ فقط درخواست عکس کارت
             await update.message.reply_text(
                 "✅ شماره شما با موفقیت تأیید شد!\n\n"
                 "📷 حالا لطفاً *عکس کارت بانکی* خود را ارسال کنید.\n"
@@ -1126,10 +1125,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ])
                 )
                 return
-
-            wallet = user_info['wallet']
-            remaining = total - wallet if wallet < total else 0
-            context.user_data['question_purchase_amount'] = total
 
             invoice_text = (
                 f"🧾 فاکتور خرید سوال\n\n"
